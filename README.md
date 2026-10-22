@@ -1,5 +1,5 @@
 
-Enjoy this add-in? Feel free to show your gratitude by following me on Patreon, MakerWorld or Creality Cloud. If you don't, you're still a legend and I hope you enjoy this add on as much as I do. 
+Enjoy this add-in? Feel free to show your gratitude by following me on Patreon, MakerWorld or Creality Cloud. If you don't, you're still a legend and I hope you enjoy this add on as much as I do!
 
 # Live Parameters for Fusion
 
