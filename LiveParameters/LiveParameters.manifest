@@ -1,0 +1,13 @@
+{
+  "autodeskProduct": "Fusion",
+  "type": "addin",
+  "id": "6f3c2a8e-4b1d-4c7e-9a52-1d8e7b3f0c91",
+  "author": "",
+  "description": {
+    "": "Dockable palette for viewing and editing user and model parameters without leaving the current sketch or opening the Change Parameters dialog."
+  },
+  "version": "1.0.0",
+  "runOnStartup": true,
+  "supportedOS": "windows|mac",
+  "editEnabled": true
+}

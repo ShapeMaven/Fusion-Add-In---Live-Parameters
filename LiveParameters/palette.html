@@ -1,0 +1,2041 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --bg: #f5f5f5; --fg: #222; --muted: #888; --line: #ddd;
+    --hover: #e8eef7; --input: #fff; --accent: #0696d7; --bad: #d9383a; --good: #2e8b57;
+    --h0: #dcdcdc; --h1: #e8e8e8; --h2: #efefef; --g1: #dfe9f2;
+    --sel: #cfe3f5; --menu: #fff; --shadow: rgba(0,0,0,.18); --veil: rgba(0,0,0,.25);
+    --screen: #f4f8fb; --mcur: rgba(6,150,215,.12);
+    --c-num: #0b7a55; --c-func: #9a2bb5; --c-unit: #1f7f99; --c-logic: #a0640a; --c-const: #806e00; --key: #ececec; --key-op: #e2edf7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #2b2b2b; --fg: #ddd; --muted: #888; --line: #3c3c3c;
+      --hover: #34404d; --input: #1f1f1f; --accent: #3aa7e0; --bad: #ff6b6b; --good: #6fcf97;
+      --h0: #3a3a3a; --h1: #333; --h2: #2f2f2f; --g1: #2f3a45;
+      --sel: #2c4a66; --menu: #333; --shadow: rgba(0,0,0,.5); --veil: rgba(0,0,0,.45);
+      --screen: #232a31; --mcur: rgba(58,167,224,.16);
+      --c-num: #b5cea8; --c-func: #d6a2e8; --c-unit: #6fd3c2; --c-logic: #e2b86b; --c-const: #dcdcaa; --key: #3d3d3d; --key-op: #34404d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 12px "Segoe UI", -apple-system, sans-serif; background: var(--bg); color: var(--fg); }
+  body.dragging, body.dragging * { cursor: grabbing !important; user-select: none !important; }
+
+  .bar { position: sticky; top: 0; z-index: 3; display: flex; gap: 6px; align-items: center;
+         padding: 6px; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .bar input[type=text] { flex: 1; min-width: 60px; }
+  .bar label { white-space: nowrap; color: var(--muted); }
+  #selbar { position: sticky; top: 35px; z-index: 3; display: none; gap: 6px; align-items: center;
+            padding: 5px 6px; background: var(--sel); border-bottom: 1px solid var(--line); }
+  #selbar.on { display: flex; }
+  #selbar .n { flex: 1; font-weight: 600; white-space: nowrap; }
+  #selbar select { width: auto; max-width: 140px; border-color: var(--line); background: var(--input); }
+
+  input[type=text], select { width: 100%; padding: 3px 4px; border: 1px solid transparent; border-radius: 3px;
+                     background: transparent; color: var(--fg); font: inherit; }
+  input[type=text]:hover { border-color: var(--line); }
+  input[type=text]:focus { outline: none; border-color: var(--accent); background: var(--input); }
+  .bar input[type=text], .add input, .add select { border-color: var(--line); background: var(--input); }
+  input.bad { border-color: var(--bad) !important; }
+  button { background: none; border: 1px solid var(--line); color: var(--fg); border-radius: 3px;
+           cursor: pointer; padding: 2px 6px; font: inherit; white-space: nowrap; }
+  button:hover { border-color: var(--accent); }
+  button:disabled { opacity: .35; cursor: default; }
+  button.icon { border: none; padding: 2px 4px; color: var(--muted); }
+  button.icon:hover:not(:disabled) { color: var(--fg); }
+  button.fav.on { color: #f0b400; }
+  #verWarn { display: none; padding: 6px 8px; background: var(--bad); color: #fff; font-weight: 600; }
+  #verWarn.on { display: block; }
+  #msg { padding: 4px 8px; display: none; word-break: break-all; }
+  #msg.err { display: block; color: var(--bad); }
+  #msg.ok { display: block; color: var(--good); }
+
+  #tableWrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  th { position: relative; text-align: left; font-weight: 600; color: var(--muted); padding: 4px;
+       border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  th .rz { position: absolute; top: 0; right: 0; width: 7px; height: 100%; cursor: col-resize; z-index: 1; }
+  th .rz::after { content: ''; position: absolute; top: 20%; bottom: 20%; right: 3px; width: 1px; background: var(--line); }
+  th .rz:hover::after, th .rz.active::after { background: var(--accent); width: 2px; right: 2px; }
+  body.resizing, body.resizing * { cursor: col-resize !important; user-select: none !important; }
+  td { padding: 1px 2px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  col.c-first { width: 62px; } col.c-del { width: 22px; }
+
+  tr.p:hover { background: var(--hover); }
+  tr.p.sel { background: var(--sel); }
+  tr.p.dragsrc { opacity: .45; }
+  tr.p.in1 td.first { padding-left: 12px; }
+  tr.p.in2 td.first { padding-left: 22px; }
+  tr.p.in3 td.first { padding-left: 32px; }
+
+  tr.h td { padding: 4px 6px; font-weight: 600; }
+  tr.h.l0 td { background: var(--h0); }
+  tr.h.l1 td { background: var(--h1); padding-left: 14px; }
+  tr.h.l2 td { background: var(--h2); padding-left: 26px; font-weight: normal; }
+  tr.h.grp td { background: var(--g1); }
+  tr.h.sub td { background: var(--h1); padding-left: 14px; color: var(--muted); }
+  tr.h.dragsrc td { opacity: .45; }
+  tr.drop-before td { box-shadow: inset 0 2px 0 var(--accent); }
+  tr.drop-after td { box-shadow: inset 0 -2px 0 var(--accent); }
+  tr.drop-in td { box-shadow: inset 0 0 0 2px var(--accent); }
+  tr.note td { color: var(--muted); font-style: italic; padding: 6px 10px 6px 30px; }
+
+  .hrow { display: flex; align-items: center; gap: 4px; min-height: 20px; }
+  .caret { width: 14px; flex: none; cursor: pointer; color: var(--muted); user-select: none; text-align: center; }
+  .hlabel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; user-select: none; }
+  .hlabel input { font-weight: 600; border-color: var(--accent) !important; background: var(--input) !important; }
+  .count { color: var(--muted); font-weight: normal; }
+  .tools { display: inline-flex; gap: 2px; }
+  .tools.hover { visibility: hidden; }
+  tr.h:hover .tools.hover { visibility: visible; }
+
+  .first { white-space: nowrap; }
+  .grip { display: inline-block; width: 14px; cursor: grab; color: var(--muted); user-select: none;
+          font-size: 11px; letter-spacing: -2px; text-align: center; }
+  .grip:hover { color: var(--fg); }
+  .grip.none { cursor: default; visibility: hidden; }
+  .val { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 4px; }
+  .role { color: var(--muted); font-size: 10px; padding: 0 5px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  details { padding: 6px; }
+  summary { cursor: pointer; color: var(--accent); }
+  .add { display: grid; grid-template-columns: 1fr 1fr 60px; gap: 4px; margin-top: 6px; }
+  .empty { padding: 16px; color: var(--muted); text-align: center; }
+
+  #ghost { position: fixed; z-index: 30; display: none; pointer-events: none; padding: 3px 8px; border-radius: 3px;
+           background: var(--accent); color: #fff; font-weight: 600; box-shadow: 0 3px 10px var(--shadow);
+           white-space: nowrap; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+
+  #menu { position: fixed; z-index: 10; display: none; min-width: 170px; max-width: 260px; padding: 4px 0;
+          background: var(--menu); border: 1px solid var(--line); border-radius: 4px; box-shadow: 0 4px 14px var(--shadow); }
+  #menu .mi { padding: 5px 12px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #menu .mi:hover { background: var(--hover); }
+  #menu .mi.dis { color: var(--muted); cursor: default; background: none; }
+  #menu .sep { height: 1px; margin: 4px 0; background: var(--line); }
+  #menu .lbl { padding: 4px 12px 2px; color: var(--muted); font-size: 11px; }
+
+  #modal { position: fixed; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center; background: var(--veil); }
+  #modal.on { display: flex; }
+  #modal .box { width: min(300px, calc(100% - 32px)); padding: 14px; background: var(--menu); border: 1px solid var(--line);
+                border-radius: 6px; box-shadow: 0 6px 20px var(--shadow); }
+  #modal .text { white-space: pre-wrap; margin-bottom: 12px; }
+  #modal .btns { display: flex; justify-content: flex-end; gap: 6px; }
+  #modal .ok { border-color: var(--accent); color: var(--accent); }
+  /* ---------- expression cell + calculator ---------- */
+  .exprcell { display: flex; align-items: center; gap: 1px; }
+  .exprcell input { flex: 1; min-width: 0; }
+  button.fx { flex: none; border: none; padding: 1px 4px; color: var(--muted); font: italic 600 12px Georgia, "Times New Roman", serif; }
+  button.fx:hover { color: var(--accent); }
+  tr.p button.fx { opacity: .45; }
+  tr.p:hover button.fx, button.fx:focus { opacity: 1; }
+
+  #calc { position: fixed; inset: 0; z-index: 25; display: none; align-items: flex-start; justify-content: center;
+          padding: 8px; background: var(--veil); }
+  #calc.on { display: flex; }
+  .cbox { width: min(560px, 100%); max-height: calc(100vh - 16px); display: flex; flex-direction: column; overflow: hidden;
+          background: var(--menu); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 28px var(--shadow); }
+  .chead { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; border-bottom: 1px solid var(--line); }
+  .ctitle { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ctitle small { font-weight: normal; color: var(--muted); }
+  .cunit { padding: 1px 7px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); font-size: 11px; white-space: nowrap; }
+  .ceditor { position: relative; margin: 0 10px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--input); }
+  .ceditor:focus-within { border-color: var(--accent); }
+  .ceditor pre, .ceditor textarea { margin: 0; padding: 6px 9px; min-height: 34px; box-sizing: border-box;
+          font: 13px/1.5 Consolas, "SF Mono", Menlo, "DejaVu Sans Mono", monospace; letter-spacing: 0;
+          white-space: pre-wrap; word-break: normal; overflow-wrap: anywhere; tab-size: 4; }
+  .ceditor pre { color: var(--fg); pointer-events: none; }
+  .ceditor textarea { position: absolute; inset: 0; width: 100%; height: 100%; resize: none; border: 0; outline: 0;
+          background: transparent; color: transparent; caret-color: var(--fg); overflow: hidden; }
+  .ceditor textarea::selection { background: var(--sel); color: transparent; }
+  .t-num { color: var(--c-num); }
+  .t-param { color: var(--accent); font-weight: 600; }
+  .t-func { color: var(--c-func); }
+  .t-unit { color: var(--c-unit); }
+  .t-logic { color: var(--c-logic); font-weight: 600; }
+  .t-const { color: var(--c-const); }
+  .t-op { color: var(--muted); }
+  .t-bad { color: var(--bad); text-decoration: underline wavy var(--bad); text-underline-offset: 3px; }
+  .t-match { background: var(--sel); border-radius: 2px; }
+  .cscreen { margin: 10px 10px 8px; padding: 12px 14px 8px; border-radius: 8px; background: var(--screen); border: 1px solid var(--line); }
+  .cmath { min-height: 44px; display: flex; flex-wrap: wrap; align-items: center; row-gap: 10px; overflow-x: auto; overflow-y: hidden;
+           font: 21px/1.25 "Cambria Math", Cambria, "STIX Two Math", "STIX Two Text", "Latin Modern Math", "Times New Roman", serif; }
+  .cresult { display: flex; align-items: baseline; justify-content: flex-end; gap: 8px; padding-top: 6px; min-height: 26px; }
+  .csrc { display: flex; align-items: center; gap: 6px; padding: 0 10px 4px; }
+  .csrc-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .csrc .grow { flex: 1; }
+  .csrc button { font-size: 11px; padding: 1px 8px; }
+  /* typeset maths */
+  .m { display: inline-flex; align-items: center; white-space: nowrap; border-radius: 3px; }
+  .m.wrap { flex-wrap: wrap; row-gap: .35em; max-width: 100%; }
+  .m.cur { background: var(--mcur); }
+  .m:hover { box-shadow: inset 0 0 0 1px var(--line); }
+  .mn { font-variant-numeric: lining-nums; }
+  .mp { color: var(--accent); font-style: italic; }
+  .mu { color: var(--c-unit); font-size: .72em; margin-left: .18em; align-self: center; font-style: normal; }
+  .mk { color: var(--c-const); font-style: italic; }
+  .mf { color: var(--c-func); font-style: normal; margin-right: .08em; }
+  .mo { margin: 0 .22em; color: var(--fg); }
+  .mo.rel { margin: 0 .3em; color: var(--c-logic); }
+  .mw { margin: 0 .35em; color: var(--c-logic); font-size: .7em; font-variant: small-caps; letter-spacing: .04em; font-family: "Segoe UI", sans-serif; }
+  .mfrac { display: inline-flex; flex-direction: column; align-items: stretch; vertical-align: middle; margin: 0 .12em; font-size: .92em; }
+  .mfrac > .num, .mfrac > .den { display: flex; justify-content: center; padding: 0 .15em; }
+  .mfrac > .num { border-bottom: 1.5px solid currentColor; padding-bottom: .08em; }
+  .mfrac > .den { padding-top: .08em; }
+  .msup { display: inline-flex; align-items: flex-start; }
+  .msup > .exp { font-size: .62em; align-self: flex-start; margin-top: -.15em; margin-left: .05em; }
+  .mgrp { display: inline-flex; align-items: stretch; }
+  .mgrp > .br, .mpw > .br, .msqrt > .rad { position: relative; flex: none; display: block; min-height: 1em; }
+  .mgrp > .br svg, .mpw > .br svg, .msqrt > .rad svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; }
+  .mgrp > .br { width: .38em; }
+  .mgrp > .in { display: inline-flex; align-items: center; padding: .05em .05em; }
+  .mfrac.wrap { max-width: 100%; }
+  .mfrac > .num > .m, .mfrac > .den > .m { justify-content: center; }
+  .msqrt { display: inline-flex; align-items: stretch; margin: 0 .05em; }
+  .msqrt > .rad { width: .7em; }
+  .msqrt > .in { display: inline-flex; align-items: center; border-top: 1.5px solid currentColor; padding: .12em .12em 0 .08em; }
+  .mbars { display: inline-flex; align-items: center; padding: .05em .18em; margin: 0 .1em; }
+  .mbars.abs { border-left: 1.5px solid currentColor; border-right: 1.5px solid currentColor; }
+  .mbars.floor { border: 1.5px solid currentColor; border-top-color: transparent; }
+  .mbars.ceil { border: 1.5px solid currentColor; border-bottom-color: transparent; }
+  .mpw { display: inline-flex; align-items: stretch; margin: 0 .1em; }
+  .mpw > .br { width: .55em; }
+  .mpw.wrap { max-width: 100%; }
+  .mpw > .cases { display: flex; flex-direction: column; row-gap: .3em; padding: .1em 0 .1em .15em; min-width: 0; }
+  .mpw .case { display: flex; align-items: center; column-gap: .9em; row-gap: .1em; }
+  .mpw.wrap .case { flex-wrap: wrap; }
+  .mpw .cond { font-size: .82em; color: var(--muted); display: inline-flex; align-items: center; }
+  .mpw .cond .mw:first-child { margin-left: 0; }
+  .mhole { display: inline-block; width: .7em; height: .9em; border: 1.5px dashed var(--muted); border-radius: 2px; margin: 0 .1em; opacity: .7; }
+  .mbad { color: var(--bad); text-decoration: underline wavy var(--bad); }
+  .cres-eq { color: var(--muted); font-size: 16px; }
+  #cRes { font-size: 18px; font-weight: 600; }
+  #cRes.err { font-size: 12px; font-weight: normal; color: var(--bad); }
+  #cRes.wait { opacity: .5; }
+  .chint { padding: 2px 12px 6px; color: var(--muted); font-size: 11px; min-height: 16px; }
+  .chint b { color: var(--fg); }
+  .chint code { font-family: Consolas, Menlo, monospace; }
+  .cuses { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 12px 8px; }
+  .cuses span { padding: 1px 7px; border-radius: 10px; background: var(--h1); font-size: 11px; color: var(--muted); }
+  .cuses b { color: var(--accent); font-weight: 600; }
+  .ctabs { display: flex; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .ctab { flex: 1; border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 7px 4px; color: var(--muted); }
+  .ctab:hover { color: var(--fg); }
+  .ctab.on { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+  .cpane { padding: 8px 10px; overflow-y: auto; flex: 1 1 auto; min-height: 150px; }
+  .keys { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+  .key { padding: 8px 0; font-size: 15px; border: none; border-radius: 5px; background: var(--key); }
+  .key:hover { box-shadow: inset 0 0 0 1px var(--accent); }
+  .key:active { transform: translateY(1px); }
+  .key.op { background: var(--key-op); color: var(--accent); font-weight: 600; }
+  .key.fn { font-size: 12px; }
+  .key.wide { grid-column: span 2; }
+  .key.warn { color: var(--bad); }
+  .cgroup { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 8px 0 4px; }
+  .cgroup:first-child { margin-top: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip { padding: 4px 9px; border: 1px solid var(--line); border-radius: 13px; font: 12px Consolas, Menlo, monospace; background: var(--input); }
+  .chip:hover { border-color: var(--accent); }
+  .chip.func { color: var(--c-func); } .chip.unit { color: var(--c-unit); } .chip.logic { color: var(--c-logic); }
+  .chip.const { color: var(--c-const); } .chip.cur { box-shadow: inset 0 0 0 1px var(--c-unit); }
+  .qunits { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+  .psearch { width: 100%; margin-bottom: 6px; border: 1px solid var(--line) !important; background: var(--input) !important; }
+  .plist .pi { display: flex; gap: 8px; align-items: baseline; padding: 5px 6px; border-radius: 4px; cursor: pointer; }
+  .plist .pi:hover { background: var(--hover); }
+  .plist .pi.self { opacity: .4; cursor: not-allowed; }
+  .plist .pn { font-weight: 600; color: var(--accent); white-space: nowrap; }
+  .plist .pc { flex: 1; min-width: 0; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .plist .pv { color: var(--muted); white-space: nowrap; font-size: 11px; }
+  .cdesc { padding: 6px 12px; border-top: 1px solid var(--line); font-size: 11px; color: var(--muted); min-height: 30px; }
+  .cdesc code { color: var(--fg); font-family: Consolas, Menlo, monospace; }
+  .cfoot { display: flex; gap: 6px; align-items: center; padding: 8px 10px; border-top: 1px solid var(--line); }
+  .cfoot .grow { flex: 1; }
+  .cfoot button { padding: 4px 12px; }
+  .cfoot .apply { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .cfoot .apply:disabled { opacity: .4; }
+</style>
+</head>
+<body>
+  <div class="bar">
+    <input type="text" id="q" placeholder="Filter…">
+    <label><input type="checkbox" id="favOnly"> ★ only</label>
+    <button id="export" title="Export all parameters to CSV">Export</button>
+    <button id="refresh" title="Refresh">⟳</button>
+  </div>
+  <div id="selbar">
+    <span class="n" id="selCount"></span>
+    <select id="selMove" title="Move selected parameters to a group"></select>
+    <button id="selNew" title="Create a group from the selected parameters">New group</button>
+    <button id="selUngroup" title="Remove selected parameters from their groups">Ungroup</button>
+    <button id="selClear" class="icon" title="Clear selection">✕</button>
+  </div>
+  <div id="verWarn"></div>
+  <div id="msg"></div>
+
+  <details id="addBox">
+    <summary>+ Add user parameter</summary>
+    <div class="add">
+      <input type="text" id="nName" placeholder="Name">
+      <div class="exprcell"><input type="text" id="nExpr" placeholder="Expression"><button class="fx" id="nExprFx" title="Open expression calculator">ƒx</button></div>
+      <input type="text" id="nUnit" placeholder="Unit" value="mm">
+      <input type="text" id="nComment" placeholder="Comment">
+      <select id="nGroup" title="Group"></select>
+      <button id="nAdd">Add</button>
+    </div>
+  </details>
+
+  <div id="tableWrap">
+  <table id="table">
+    <colgroup>
+      <col class="c-first"><col data-col="name"><col data-col="expr"><col data-col="val"><col data-col="comment"><col class="c-del">
+    </colgroup>
+    <thead><tr><th></th>
+      <th data-col="name">Name<span class="rz" title="Drag to resize · double-click to reset all"></span></th>
+      <th data-col="expr">Expression<span class="rz" title="Drag to resize · double-click to reset all"></span></th>
+      <th data-col="val">Value<span class="rz" title="Drag to resize · double-click to reset all"></span></th>
+      <th data-col="comment">Comment<span class="rz" title="Drag to resize · double-click to reset all"></span></th>
+      <th></th></tr></thead>
+    <tbody id="body"></tbody>
+  </table>
+  </div>
+
+  <div id="calc">
+    <div class="cbox" role="dialog" aria-label="Expression calculator">
+      <div class="chead">
+        <span class="ctitle" id="cTitle"></span>
+        <span class="cunit" id="cUnit"></span>
+        <button class="icon" id="cClose" title="Cancel (Esc)">✕</button>
+      </div>
+      <div class="cscreen">
+        <div class="cmath" id="cMath" title="Click part of the expression to select it"></div>
+        <div class="cresult"><span class="cres-eq">=</span><span id="cRes"></span></div>
+      </div>
+      <div class="csrc">
+        <span class="csrc-label">As text</span>
+        <span class="grow"></span>
+        <button id="cTidy" title="Rewrite the text without unnecessary brackets and spacing (checked with Fusion first)">Tidy up</button>
+      </div>
+      <div class="ceditor"><pre id="cHL" aria-hidden="true"></pre><textarea id="cIn" spellcheck="false" autocomplete="off" rows="1"></textarea></div>
+      <div class="chint" id="cHint"></div>
+      <div class="cuses" id="cUses"></div>
+      <div class="ctabs" id="cTabs">
+        <button class="ctab on" data-tab="keypad">Keypad</button>
+        <button class="ctab" data-tab="functions">Functions</button>
+        <button class="ctab" data-tab="params">Parameters</button>
+        <button class="ctab" data-tab="units">Units</button>
+      </div>
+      <div class="cpane" id="cPane"></div>
+      <div class="cdesc" id="cDesc"></div>
+      <div class="cfoot">
+        <button id="cUndo" title="Undo (Ctrl+Z)">↶</button>
+        <button id="cRedo" title="Redo (Ctrl+Y)">↷</button>
+        <span class="grow"></span>
+        <button id="cCancel">Cancel</button>
+        <button id="cApply" class="apply" title="Apply (Enter)">Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="ghost"></div>
+  <div id="menu"></div>
+  <div id="modal"><div class="box"><div class="text" id="modalText"></div>
+    <div class="btns"><button id="modalCancel">Cancel</button><button id="modalOk" class="ok">OK</button></div></div></div>
+
+<script>
+let DATA = { doc: null, user: [], model: [], groups: [], ungrouped: [] };
+let pending = false;
+let SEL = new Set();          // selected user-parameter names
+let ORDER = [];               // visible user-parameter names in display order (for shift-select)
+let anchor = null;            // last clicked name for shift ranges
+let renaming = null;          // key of the header being renamed inline ('G:<group>' or 'F:<comp>/<ownerKey>')
+let scrollTo = null;          // group header to scroll into view after render
+let COLL = {};
+var CALC = { open: false };
+const PAGE_VERSION = '1.5';   // must match VERSION in LiveParameters.py   // expression calculator state (see below)                // collapse overrides: key -> bool (true = collapsed)
+const $ = id => document.getElementById(id);
+
+const DEFAULTS = { S_user: false, S_model: true };
+function isCollapsed(key) { return key in COLL ? COLL[key] : (DEFAULTS[key] || false); }
+
+// ---------------------------------------------------------------- storage
+
+function docId(d) { return (d && (d.docKey || d.doc)) || ''; }
+function storeKey() { return 'liveParams.collapse.' + docId(DATA); }
+function loadCollapse() {
+  try { COLL = JSON.parse(localStorage.getItem(storeKey()) || '{}') || {}; } catch (e) { COLL = {}; }
+}
+function saveCollapse() {
+  try { localStorage.setItem(storeKey(), JSON.stringify(COLL)); } catch (e) {}
+}
+function toggle(key) { COLL[key] = !isCollapsed(key); saveCollapse(); render(); }
+function moveCollapseKey(from, to) {
+  if (from in COLL) { COLL[to] = COLL[from]; delete COLL[from]; saveCollapse(); }
+}
+
+// ---------------------------------------------------------------- comms
+
+function showMsg(text, kind) {
+  const m = $('msg');
+  m.textContent = text || '';
+  m.className = text ? (kind || 'err') : '';
+}
+
+function send(action, obj) {
+  let p;
+  try { p = adsk.fusionSendData(action, JSON.stringify(obj || {})); }
+  catch (e) { showMsg('Could not reach Fusion: ' + e); return Promise.resolve({ ok: false }); }
+  return Promise.resolve(p).then(r => {
+    let res;
+    if (r === undefined || r === null || r === '') res = { ok: false, error: 'No reply from Fusion for "' + action + '".' };
+    else { try { res = JSON.parse(r); } catch (e) { res = { ok: false, error: 'Unexpected reply: ' + String(r) }; } }
+    if (!res.ok) showMsg(res.error || 'Failed');
+    else if (res.notice) showMsg(res.notice, 'ok');
+    else showMsg('');
+    if (res.data) setData(res.data, true);
+    return res;
+  }).catch(e => {
+    showMsg('Error: ' + (e && e.message ? e.message : e));
+    return { ok: false };
+  });
+}
+
+// Pushed from Python (after commands finish, document switches, etc.)
+window.fusionJavaScriptHandler = {
+  handle(action, data) {
+    try { if (action === 'data') setData(JSON.parse(data)); } catch (e) {}
+    return 'OK';
+  }
+};
+
+function isEditing() {
+  const a = document.activeElement;
+  return (a && a.tagName === 'INPUT' && a.closest('#body')) || !!DRAG;
+}
+
+function setData(d, force) {
+  const vw = $('verWarn');
+  if (d.version !== PAGE_VERSION) {
+    vw.textContent = 'Live Parameters was updated. Restart Fusion to finish the update (page ' + PAGE_VERSION +
+                     ', add-in ' + (d.version || 'older') + ').';
+    vw.classList.add('on');
+  } else vw.classList.remove('on');
+  const docChanged = docId(d) !== docId(DATA);
+  if (docChanged && DRAG) endDrag(false);
+  DATA = d;
+  DATA.groups = DATA.groups || [];
+  DATA.ungrouped = DATA.ungrouped || [];
+  if (docChanged && CALC.open) closeCalc();
+  if (docChanged) {
+    SEL.clear(); anchor = null; renaming = null; loadCollapse();
+    // A different file: drop any half-finished edit so it can't land in the new document.
+    if (document.activeElement && document.activeElement.closest && document.activeElement.closest('#body')) {
+      const a = document.activeElement;
+      if (a.dataset && 'orig' in a.dataset) { a.value = a.dataset.orig; a.blur(); }
+      else a.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));   // cancels a header rename
+    }
+    showMsg('');
+    force = true;
+  }
+  fillGroupSelects();
+  if (!force && isEditing()) { pending = true; return; }
+  pending = false;
+  render();
+}
+
+// ---------------------------------------------------------------- helpers
+
+function el(tag, props, children) {
+  const e = document.createElement(tag);
+  Object.assign(e, props || {});
+  (children || []).forEach(c => c && e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c));
+  return e;
+}
+
+function matches(p, q) {
+  if (!q) return true;
+  return [p.name, p.expr, p.comment, p.owner, p.comp, p.role]
+    .some(s => s && s.toLowerCase().includes(q));
+}
+
+function groupOf(name) {
+  for (const g of DATA.groups) if (g.params.includes(name)) return g.name;
+  return '';
+}
+
+function containerList(group) {
+  if (!group) return DATA.ungrouped;
+  const g = DATA.groups.find(x => x.name === group);
+  return g ? g.params : [];
+}
+
+function fillGroupSelects() {
+  const n = $('nGroup'), cur = n.value;
+  n.innerHTML = '';
+  n.appendChild(el('option', { value: '', textContent: '(no group)' }));
+  DATA.groups.forEach(g => n.appendChild(el('option', { value: g.name, textContent: g.name })));
+  n.value = DATA.groups.some(g => g.name === cur) ? cur : '';
+
+  const s = $('selMove');
+  s.innerHTML = '';
+  s.appendChild(el('option', { value: '', textContent: DATA.groups.length ? 'Move to…' : 'No groups yet' }));
+  DATA.groups.forEach(g => s.appendChild(el('option', { value: g.name, textContent: g.name })));
+  s.disabled = !DATA.groups.length;
+  s.value = '';
+}
+
+function updateSelBar() {
+  const n = SEL.size;
+  $('selbar').classList.toggle('on', n > 0);
+  $('selCount').textContent = n + ' selected';
+  $('selUngroup').disabled = ![...SEL].some(x => groupOf(x));
+}
+
+// In-page confirm (native dialogs are unreliable inside Fusion palettes)
+let modalResolve = null;
+function ask(text, okLabel) {
+  $('modalText').textContent = text;
+  $('modalOk').textContent = okLabel || 'OK';
+  $('modal').classList.add('on');
+  setTimeout(() => $('modalOk').focus(), 0);
+  return new Promise(res => { modalResolve = res; });
+}
+function closeModal(v) {
+  $('modal').classList.remove('on');
+  if (modalResolve) { const r = modalResolve; modalResolve = null; r(v); }
+}
+$('modalOk').onclick = () => closeModal(true);
+$('modalCancel').onclick = () => closeModal(false);
+$('modal').addEventListener('mousedown', e => { if (e.target.id === 'modal') closeModal(false); });
+
+// ---------------------------------------------------------------- drag (pointer based)
+//
+// HTML5 drag-and-drop is unreliable inside Fusion's palette browser, so this uses
+// plain mouse events. Rows and headers carry data-kind so drops can be resolved.
+
+let PRESS = null;   // { kind: 'param'|'group', name, x, y, ev }
+let DRAG = null;    // { kind, names|name, target }
+let scrollTimer = null, lastPt = null;
+
+function startPress(e, kind, name) {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  PRESS = { kind, name, x: e.clientX, y: e.clientY, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey };
+}
+
+function beginDrag() {
+  closeMenu();
+  if (PRESS.kind === 'param') {
+    if (!SEL.has(PRESS.name)) { SEL.clear(); SEL.add(PRESS.name); anchor = PRESS.name; }
+    // Keep display order for multi-selections
+    const names = ORDER.filter(n => SEL.has(n));
+    DRAG = { kind: 'param', names: names.length ? names : [PRESS.name] };
+    $('ghost').textContent = DRAG.names.length === 1 ? DRAG.names[0] : DRAG.names.length + ' parameters';
+  } else {
+    DRAG = { kind: 'group', name: PRESS.name };
+    $('ghost').textContent = 'Group: ' + PRESS.name;
+  }
+  document.body.classList.add('dragging');
+  render();   // shows selection + source styling
+  $('ghost').style.display = 'block';
+  scrollTimer = setInterval(autoScroll, 30);
+}
+
+function autoScroll() {
+  if (!DRAG || !lastPt) return;
+  const top = 80, h = window.innerHeight;
+  let dy = 0;
+  if (lastPt.y < top) dy = -Math.ceil((top - lastPt.y) / 4);
+  else if (lastPt.y > h - 30) dy = Math.ceil((lastPt.y - (h - 30)) / 3);
+  if (dy) { window.scrollBy(0, dy); updateTarget(lastPt.x, lastPt.y); }
+}
+
+function clearIndicators() {
+  document.querySelectorAll('.drop-before,.drop-after,.drop-in').forEach(x => x.classList.remove('drop-before', 'drop-after', 'drop-in'));
+}
+
+// Work out where a param drop would land: { group, anchor, where } (anchor null = append)
+function resolveParamDrop(tr, y) {
+  const k = tr.dataset.kind;
+  if (k === 'row') {
+    const r = tr.getBoundingClientRect();
+    const after = y > r.top + r.height / 2;
+    const group = tr.dataset.group || '';
+    const list = containerList(group);
+    const moving = new Set(DRAG.names);
+    let pos = list.indexOf(tr.dataset.name) + (after ? 1 : 0);
+    while (pos < list.length && moving.has(list[pos])) pos++;
+    return { group, anchor: pos < list.length ? list[pos] : null, where: 'before', ind: after ? 'drop-after' : 'drop-before' };
+  }
+  if (k === 'group' || k === 'group-empty') return { group: tr.dataset.group, anchor: null, ind: 'drop-in' };
+  if (k === 'ungrouped') return { group: '', anchor: null, ind: 'drop-in' };
+  return null;
+}
+
+function resolveGroupDrop(tr, y) {
+  const k = tr.dataset.kind;
+  if (k === 'group') {
+    if (tr.dataset.group === DRAG.name) return null;
+    const r = tr.getBoundingClientRect();
+    const after = y > r.top + r.height / 2;
+    return { target: tr.dataset.group, where: after ? 'after' : 'before', ind: after ? 'drop-after' : 'drop-before' };
+  }
+  if ((k === 'row' || k === 'group-empty') && tr.dataset.group) {
+    if (tr.dataset.group === DRAG.name) return null;
+    return { target: tr.dataset.group, where: 'after', ind: 'drop-after' };
+  }
+  if (k === 'ungrouped' || (k === 'row' && !tr.dataset.group)) return { target: '', ind: 'drop-before', onUngrouped: true };
+  return null;
+}
+
+function updateTarget(x, y) {
+  clearIndicators();
+  const hit = document.elementFromPoint(x, y);
+  const tr = hit && hit.closest ? hit.closest('tr[data-kind]') : null;
+  let t = null;
+  if (tr) t = DRAG.kind === 'param' ? resolveParamDrop(tr, y) : resolveGroupDrop(tr, y);
+  DRAG.target = t;
+  if (t) {
+    let indRow = tr;
+    if (t.onUngrouped) indRow = document.querySelector('tr[data-kind="ungrouped"]') || tr;
+    indRow.classList.add(t.ind);
+  }
+}
+
+document.addEventListener('mousemove', e => {
+  if (PRESS && !DRAG && Math.hypot(e.clientX - PRESS.x, e.clientY - PRESS.y) > 4) beginDrag();
+  if (!DRAG) return;
+  lastPt = { x: e.clientX, y: e.clientY };
+  const g = $('ghost');
+  g.style.left = (e.clientX + 12) + 'px';
+  g.style.top = (e.clientY + 8) + 'px';
+  updateTarget(e.clientX, e.clientY);
+});
+
+function endDrag(commit) {
+  const d = DRAG;
+  DRAG = null; PRESS = null; lastPt = null;
+  clearInterval(scrollTimer);
+  clearIndicators();
+  $('ghost').style.display = 'none';
+  document.body.classList.remove('dragging');
+  if (commit && d && d.target) {
+    const t = d.target;
+    if (d.kind === 'param') {
+      if (t.group) { delete COLL['G:' + t.group]; saveCollapse(); }
+      SEL.clear();
+      send('move', { params: d.names, group: t.group, anchor: t.anchor, where: t.where || 'before' });
+      return;
+    }
+    send('groupMove', { name: d.name, target: t.target, where: t.where });
+    return;
+  }
+  if (pending) { pending = false; }
+  render();
+}
+
+document.addEventListener('mouseup', e => {
+  if (DRAG) { endDrag(true); return; }
+  if (PRESS) {
+    const p = PRESS; PRESS = null;
+    if (p.kind === 'param') onGripClick(p);
+  }
+});
+
+// ---------------------------------------------------------------- rows
+
+function field(p, key, action, argKey) {
+  const inp = el('input', { type: 'text', value: p[key] || '' });
+  inp.dataset.orig = p[key] || '';
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') inp.blur();
+    if (e.key === 'Escape') { inp.value = inp.dataset.orig; inp.classList.remove('bad'); inp.blur(); }
+  });
+  inp.addEventListener('change', () => {
+    if (inp.value === inp.dataset.orig) return;
+    const args = { name: p.name };
+    args[argKey] = inp.value;
+    send(action, args).then(res => {
+      inp.classList.toggle('bad', !res.ok);
+      if (res.ok && action === 'rename' && SEL.has(p.name)) { SEL.delete(p.name); SEL.add(inp.value.trim()); }
+    });
+  });
+  return inp;
+}
+
+function onGripClick(p) {
+  const name = p.name;
+  if (p.shift && anchor && ORDER.includes(anchor)) {
+    const a = ORDER.indexOf(anchor), b = ORDER.indexOf(name);
+    if (!p.ctrl) SEL.clear();
+    ORDER.slice(Math.min(a, b), Math.max(a, b) + 1).forEach(n => SEL.add(n));
+  } else if (p.ctrl) {
+    SEL.has(name) ? SEL.delete(name) : SEL.add(name);
+    anchor = name;
+  } else {
+    if (SEL.size === 1 && SEL.has(name)) SEL.clear(); else { SEL.clear(); SEL.add(name); }
+    anchor = name;
+  }
+  render();
+}
+
+// opts: { user: bool, group: string, indent: 1..3 }
+function row(p, opts) {
+  let grip;
+  if (opts.user) {
+    grip = el('span', { className: 'grip', textContent: '⋮⋮', title: 'Drag to reorder or move to a group · click to select (Ctrl/Shift for more)' });
+    grip.addEventListener('mousedown', e => startPress(e, 'param', p.name));
+  } else {
+    grip = el('span', { className: 'grip none', textContent: '⋮⋮' });
+  }
+
+  const star = el('button', { className: 'icon fav' + (p.fav ? ' on' : ''), textContent: p.fav ? '★' : '☆', title: 'Favourite' });
+  star.onclick = () => send('toggleFavorite', { name: p.name });
+
+  const nameCell = el('td', {}, [field(p, 'name', 'rename', 'newName')]);
+  if (!opts.user && p.role) nameCell.appendChild(el('div', { className: 'role', textContent: p.role, title: p.role }));
+
+  let del = null;
+  if (opts.user) {
+    del = el('button', { className: 'icon', textContent: '✕', title: 'Delete parameter' });
+    del.onclick = () => ask('Delete parameter "' + p.name + '"?', 'Delete').then(ok => { if (ok) send('delete', { name: p.name }); });
+  }
+
+  const dragging = DRAG && DRAG.kind === 'param' && DRAG.names.includes(p.name);
+  const tr = el('tr', { className: 'p in' + (opts.indent || 1) + (SEL.has(p.name) ? ' sel' : '') + (dragging ? ' dragsrc' : '') }, [
+    el('td', { className: 'first' }, [grip, star]),
+    nameCell,
+    exprCell(p, opts.user),
+    el('td', { className: 'val', textContent: p.value, title: p.value }),
+    el('td', {}, [field(p, 'comment', 'setComment', 'comment')]),
+    el('td', {}, [del])
+  ]);
+  if (opts.user) {
+    tr.dataset.kind = 'row';
+    tr.dataset.name = p.name;
+    tr.dataset.group = opts.group || '';
+    tr.addEventListener('contextmenu', e => openMenu(e, p.name));
+    ORDER.push(p.name);
+  }
+  return tr;
+}
+
+// ---------------------------------------------------------------- headers
+
+// Inline rename input for a header. onCommit(newValue) is called only if changed.
+function renameInput(current, onCommit) {
+  const inp = el('input', { type: 'text', value: current });
+  let done = false;
+  const finish = commit => {
+    if (done) return; done = true;
+    renaming = null;
+    const v = inp.value.trim();
+    if (commit && v && v !== current) onCommit(v); else render();
+  };
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') finish(true);
+    if (e.key === 'Escape') finish(false);
+    e.stopPropagation();
+  });
+  inp.addEventListener('click', e => e.stopPropagation());
+  inp.addEventListener('dblclick', e => e.stopPropagation());
+  inp.addEventListener('mousedown', e => e.stopPropagation());
+  inp.addEventListener('blur', () => finish(true));
+  setTimeout(() => { inp.focus(); inp.select(); }, 0);
+  return inp;
+}
+
+// Generic collapsible header. level: 0 section, 1 group/component, 2 feature.
+// o.onRename: enables double-click rename (single click toggles after a short delay).
+function headerRow(o) {
+  const collapsed = o.key && !o.forceOpen ? isCollapsed(o.key) : false;
+  const caret = el('span', { className: 'caret', textContent: o.key ? (collapsed ? '▸' : '▾') : '' });
+  const label = el('span', { className: 'hlabel', title: o.title || '' });
+  if (o.labelNode) label.appendChild(o.labelNode);
+  else {
+    label.appendChild(document.createTextNode(o.text + ' '));
+    if (o.count !== undefined) label.appendChild(el('span', { className: 'count', textContent: '(' + o.count + ')' }));
+  }
+  if (o.key && !o.forceOpen) caret.onclick = e => { e.stopPropagation(); toggle(o.key); };
+  if (!o.labelNode) {
+    let t = null;
+    label.onclick = () => {
+      if (!o.key || o.forceOpen) return;
+      if (o.onRename) { clearTimeout(t); t = setTimeout(() => toggle(o.key), 230); }
+      else toggle(o.key);
+    };
+    if (o.onRename) label.ondblclick = e => { e.stopPropagation(); clearTimeout(t); o.onRename(); };
+  }
+  const parts = [];
+  if (o.grip) parts.push(o.grip);
+  parts.push(caret, label);
+  if (o.tools) parts.push(o.tools);
+  const tr = el('tr', { className: 'h l' + o.level + (o.cls ? ' ' + o.cls : '') },
+    [el('td', { colSpan: 6 }, [el('div', { className: 'hrow' }, parts)])]);
+  if (o.kind) tr.dataset.kind = o.kind;
+  tr.addEventListener('contextmenu', e => e.preventDefault());
+  return { tr, open: !collapsed };
+}
+
+function groupHeader(g, shownCount, idx, filtering) {
+  const key = 'G:' + g.name;
+  const startRename = () => { renaming = key; render(); };
+  const labelNode = renaming === key
+    ? renameInput(g.name, v => send('groupRename', { name: g.name, newName: v }).then(res => {
+        if (!res.ok) { render(); return; }
+        moveCollapseKey(key, 'G:' + v); render();
+      }))
+    : null;
+
+  const grip = el('span', { className: 'grip', textContent: '⋮⋮', title: 'Drag to reorder groups' });
+  grip.addEventListener('mousedown', e => startPress(e, 'group', g.name));
+
+  const ren = el('button', { className: 'icon', textContent: '✎', title: 'Rename group' });
+  ren.onclick = e => { e.stopPropagation(); startRename(); };
+  const del = el('button', { className: 'icon', textContent: '✕', title: 'Delete group (parameters are kept)' });
+  del.onclick = e => {
+    e.stopPropagation();
+    ask('Delete group "' + g.name + '"?\nIts parameters are kept and become ungrouped.', 'Delete group').then(ok => {
+      if (!ok) return;
+      delete COLL[key]; saveCollapse();
+      send('groupDelete', { name: g.name });
+    });
+  };
+
+  const h = headerRow({
+    level: 1, cls: 'grp' + (DRAG && DRAG.kind === 'group' && DRAG.name === g.name ? ' dragsrc' : ''),
+    key, forceOpen: filtering, text: g.name, count: shownCount, labelNode, grip,
+    title: 'Click to collapse · double-click to rename', onRename: startRename, kind: 'group',
+    tools: el('span', { className: 'tools hover' }, [ren, del])
+  });
+  h.tr.dataset.group = g.name;
+  return h;
+}
+
+function featureHeader(c, f, filtering) {
+  const key = 'F:' + c.id + '/' + f.name;
+  const rkey = 'R:' + c.id + '/' + f.key;
+  const startRename = () => { renaming = rkey; render(); };
+  const labelNode = renaming === rkey
+    ? renameInput(f.name, v => send('renameFeature', { param: f.params[0].name, newName: v }).then(res => {
+        if (!res.ok) { render(); return; }
+        moveCollapseKey(key, 'F:' + c.id + '/' + v); render();
+      }))
+    : null;
+  const ren = el('button', { className: 'icon', textContent: '✎', title: 'Rename (same as renaming in the timeline)' });
+  ren.onclick = e => { e.stopPropagation(); startRename(); };
+  return headerRow({
+    level: 2, key, forceOpen: filtering, text: f.name, count: f.params.length, labelNode,
+    title: 'Click to collapse · double-click to rename', onRename: startRename,
+    tools: el('span', { className: 'tools hover' }, [ren])
+  });
+}
+
+function note(text, indent, kind, group) {
+  const tr = el('tr', { className: 'note' }, [el('td', { colSpan: 6, textContent: text })]);
+  tr.firstChild.style.paddingLeft = (14 + indent * 12) + 'px';
+  if (kind) { tr.dataset.kind = kind; tr.dataset.group = group || ''; }
+  return tr;
+}
+
+// ---------------------------------------------------------------- render
+
+function render() {
+  const body = $('body');
+  body.innerHTML = '';
+  ORDER = [];
+  closeMenu();
+
+  if (!DATA.doc) {
+    body.appendChild(el('tr', {}, [el('td', { colSpan: 6, className: 'empty', textContent: 'No active design.' })]));
+    updateSelBar();
+    return;
+  }
+
+  const q = $('q').value.trim().toLowerCase();
+  const favOnly = $('favOnly').checked;
+  const filtering = !!q || favOnly;
+  const keep = p => matches(p, q) && (!favOnly || p.fav);
+
+  const userByName = {};
+  DATA.user.forEach(p => userByName[p.name] = p);
+  [...SEL].forEach(n => { if (!userByName[n]) SEL.delete(n); });
+
+  // ================= User Parameters =================
+  const userShown = DATA.user.filter(keep);
+  const addGroupBtn = el('button', { textContent: '+ Group', title: 'New group (includes selected parameters)' });
+  addGroupBtn.onclick = e => { e.stopPropagation(); createGroup([...SEL]); };
+  const uh = headerRow({
+    level: 0, key: 'S_user', forceOpen: filtering, text: 'User Parameters', count: userShown.length,
+    kind: DATA.groups.length ? null : 'ungrouped',
+    tools: el('span', { className: 'tools' }, [addGroupBtn])
+  });
+  body.appendChild(uh.tr);
+
+  if (uh.open) {
+    DATA.groups.forEach((g, idx) => {
+      const items = g.params.map(n => userByName[n]).filter(p => p && keep(p));
+      if (filtering && items.length === 0 && !g.name.toLowerCase().includes(q)) return;
+      const gh = groupHeader(g, items.length, idx, filtering);
+      body.appendChild(gh.tr);
+      if (!gh.open) return;
+      if (items.length === 0) body.appendChild(note(filtering ? 'No matches' : 'Empty — drag parameters here', 1, 'group-empty', g.name));
+      else items.forEach(p => body.appendChild(row(p, { user: true, group: g.name, indent: 2 })));
+    });
+
+    const ungrouped = DATA.ungrouped.map(n => userByName[n]).filter(p => p && keep(p));
+    if (DATA.groups.length) {
+      const sh = headerRow({ level: 1, cls: 'sub', text: 'Ungrouped', count: ungrouped.length, kind: 'ungrouped' });
+      body.appendChild(sh.tr);
+      ungrouped.forEach(p => body.appendChild(row(p, { user: true, group: '', indent: 2 })));
+    } else {
+      ungrouped.forEach(p => body.appendChild(row(p, { user: true, group: '', indent: 1 })));
+    }
+    if (!DATA.user.length) body.appendChild(note('No user parameters yet.', 0));
+  }
+
+  // ================= Model Parameters =================
+  // Python sends these sorted by component, then timeline. Group without reordering.
+  const comps = [];
+  const compIdx = {};
+  DATA.model.filter(keep).forEach(p => {
+    const ck = String(p.compId);
+    if (!(ck in compIdx)) { compIdx[ck] = comps.length; comps.push({ id: ck, name: p.comp, feats: [], featIdx: {} }); }
+    const c = comps[compIdx[ck]];
+    const fk = p.ownerKey || p.owner;
+    if (!(fk in c.featIdx)) { c.featIdx[fk] = c.feats.length; c.feats.push({ key: fk, name: p.owner, params: [] }); }
+    c.feats[c.featIdx[fk]].params.push(p);
+  });
+  const modelCount = comps.reduce((n, c) => n + c.feats.reduce((m, f) => m + f.params.length, 0), 0);
+
+  const mh = headerRow({ level: 0, key: 'S_model', forceOpen: filtering && modelCount > 0, text: 'Model Parameters', count: modelCount });
+  body.appendChild(mh.tr);
+  if (mh.open) {
+    if (!modelCount) body.appendChild(note(filtering ? 'No matches' : 'No model parameters.', 0));
+    comps.forEach(c => {
+      const n = c.feats.reduce((m, f) => m + f.params.length, 0);
+      const ch = headerRow({ level: 1, key: 'C:' + c.id, forceOpen: filtering, text: c.name, count: n });
+      body.appendChild(ch.tr);
+      if (!ch.open) return;
+      c.feats.forEach(f => {
+        const fh = featureHeader(c, f, filtering);
+        body.appendChild(fh.tr);
+        if (!fh.open) return;
+        f.params.forEach(p => body.appendChild(row(p, { user: false, indent: 3 })));
+      });
+    });
+  }
+
+  updateSelBar();
+
+  if (scrollTo) {
+    const target = [...body.querySelectorAll('tr[data-kind="group"]')].find(t => t.dataset.group === scrollTo);
+    if (target && target.scrollIntoView) target.scrollIntoView({ block: 'nearest' });
+    scrollTo = null;
+  }
+}
+
+// ---------------------------------------------------------------- context menu
+
+function closeMenu() { $('menu').style.display = 'none'; }
+
+function openMenu(e, name) {
+  e.preventDefault();
+  if (!SEL.has(name)) { SEL.clear(); SEL.add(name); anchor = name; render(); }
+  const names = ORDER.filter(n => SEL.has(n));
+  const label = names.length === 1 ? '"' + names[0] + '"' : names.length + ' parameters';
+  const anyGrouped = names.some(n => groupOf(n));
+  const current = names.length === 1 ? groupOf(names[0]) : null;
+
+  const m = $('menu');
+  m.innerHTML = '';
+  const item = (text, fn, disabled) => {
+    const d = el('div', { className: 'mi' + (disabled ? ' dis' : ''), textContent: text, title: text });
+    if (!disabled) d.onclick = () => { closeMenu(); fn(); };
+    m.appendChild(d);
+  };
+
+  m.appendChild(el('div', { className: 'lbl', textContent: label }));
+  if (DATA.groups.length) {
+    m.appendChild(el('div', { className: 'lbl', textContent: 'Move to group' }));
+    DATA.groups.forEach(g => item('→ ' + g.name, () => assign(names, g.name), g.name === current));
+    m.appendChild(el('div', { className: 'sep' }));
+  }
+  item('New group from ' + (names.length === 1 ? 'parameter' : 'selection'), () => createGroup(names));
+  item('Remove from group', () => assign(names, ''), !anyGrouped);
+  m.appendChild(el('div', { className: 'sep' }));
+  item('Clear selection', () => { SEL.clear(); render(); });
+
+  m.style.display = 'block';
+  const r = m.getBoundingClientRect();
+  m.style.left = Math.max(0, Math.min(e.clientX, window.innerWidth - r.width - 4)) + 'px';
+  m.style.top = Math.max(0, Math.min(e.clientY, window.innerHeight - r.height - 4)) + 'px';
+}
+
+document.addEventListener('mousedown', e => { if (!e.target.closest('#menu')) closeMenu(); });
+document.addEventListener('keydown', e => {
+  if (CALC.open) return;   // the calculator handles its own keys
+  if (e.key === 'Escape') {
+    if (DRAG) { endDrag(false); return; }
+    if ($('modal').classList.contains('on')) { closeModal(false); return; }
+    closeMenu();
+    if (!isEditing() && SEL.size) { SEL.clear(); render(); }
+  }
+  if (e.key === 'Enter' && $('modal').classList.contains('on')) closeModal(true);
+});
+window.addEventListener('blur', () => { closeMenu(); if (DRAG) endDrag(false); });
+
+// ---------------------------------------------------------------- actions
+
+function assign(names, group) {
+  SEL.clear();
+  if (group) { delete COLL['G:' + group]; COLL['S_user'] = false; saveCollapse(); }
+  send('move', { params: names, group: group });
+}
+
+function createGroup(names) {
+  send('groupCreate', { params: names || [] }).then(res => {
+    if (!res.ok) return;
+    if (!res.created) { showMsg('Group was not created (no name returned). Try reloading the add-in.'); return; }
+    SEL.clear();
+    COLL['S_user'] = false;
+    delete COLL['G:' + res.created];
+    saveCollapse();
+    if ($('q').value || $('favOnly').checked) { $('q').value = ''; $('favOnly').checked = false; }
+    renaming = 'G:' + res.created;
+    scrollTo = res.created;
+    render();
+  });
+}
+
+// Apply deferred refreshes once the user stops editing in the table
+document.addEventListener('focusout', () => {
+  setTimeout(() => { if (pending && !isEditing()) { pending = false; render(); } }, 0);
+});
+
+['q', 'favOnly'].forEach(id => $(id).addEventListener('input', render));
+$('refresh').onclick = () => send('refresh');
+$('export').onclick = () => { showMsg('Choose where to save…', 'ok'); send('export').then(res => { if (res.cancelled) showMsg(''); }); };
+
+$('selMove').addEventListener('change', () => { const g = $('selMove').value; if (g) assign(ORDER.filter(n => SEL.has(n)), g); });
+$('selNew').onclick = () => createGroup(ORDER.filter(n => SEL.has(n)));
+$('selUngroup').onclick = () => assign(ORDER.filter(n => SEL.has(n)), '');
+$('selClear').onclick = () => { SEL.clear(); render(); };
+
+$('nAdd').onclick = () => {
+  send('add', {
+    name: $('nName').value, expression: $('nExpr').value,
+    unit: $('nUnit').value, comment: $('nComment').value, group: $('nGroup').value
+  }).then(res => {
+    if (res.ok) { $('nName').value = ''; $('nExpr').value = ''; $('nComment').value = ''; $('nName').focus(); }
+  });
+};
+['nName', 'nExpr', 'nUnit', 'nComment'].forEach(id =>
+  $(id).addEventListener('keydown', e => { if (e.key === 'Enter') $('nAdd').click(); }));
+
+// ---------------------------------------------------------------- expression calculator
+//
+// Language reference: Fusion's "Parameters reference" and "Unit types" help pages.
+// Arguments are separated by ';', "not equal" is '<>', logic words are and / or / not.
+
+const CFUNCS = [
+  // [name, argument names, group, description]
+  ['sqrt', ['x'], 'Math', 'Square root of x.'],
+  ['abs', ['x'], 'Math', 'Absolute value (drops the sign). Keeps units.'],
+  ['pow', ['base', 'exponent'], 'Math', 'base raised to exponent. The exponent must be unitless.'],
+  ['min', ['a', 'b'], 'Math', 'The smaller of two values.'],
+  ['max', ['a', 'b'], 'Math', 'The larger of two values.'],
+  ['round', ['x'], 'Math', 'Nearest whole number (.5 rounds away from zero).'],
+  ['floor', ['x'], 'Math', 'Round down to a whole number.'],
+  ['ceil', ['x'], 'Math', 'Round up to a whole number.'],
+  ['sign', ['x'], 'Math', 'Sign of x.'],
+  ['exp', ['x'], 'Math', 'e raised to the power x.'],
+  ['ln', ['x'], 'Math', 'Natural logarithm.'],
+  ['log', ['x'], 'Math', 'Base-10 logarithm.'],
+  ['random', [], 'Math', 'A random number between 0 and 1.'],
+  ['sin', ['angle'], 'Trig', 'Sine of an angle.'],
+  ['cos', ['angle'], 'Trig', 'Cosine of an angle.'],
+  ['tan', ['angle'], 'Trig', 'Tangent of an angle.'],
+  ['asin', ['x'], 'Trig', 'Inverse sine. Returns an angle.'],
+  ['acos', ['x'], 'Trig', 'Inverse cosine. Returns an angle.'],
+  ['atan', ['x'], 'Trig', 'Inverse tangent. Returns an angle.'],
+  ['sinh', ['x'], 'Hyperbolic', 'Hyperbolic sine.'],
+  ['cosh', ['x'], 'Hyperbolic', 'Hyperbolic cosine.'],
+  ['tanh', ['x'], 'Hyperbolic', 'Hyperbolic tangent.'],
+  ['asinh', ['x'], 'Hyperbolic', 'Inverse hyperbolic sine.'],
+  ['acosh', ['x'], 'Hyperbolic', 'Inverse hyperbolic cosine.'],
+  ['atanh', ['x'], 'Hyperbolic', 'Inverse hyperbolic tangent.'],
+  ['if', ['condition', 'value if true', 'value if false'], 'Logic',
+   'Chooses a value. Nest another if() in either value for else-if chains.'],
+];
+const CF = {};
+CFUNCS.forEach(f => CF[f[0]] = { args: f[1], group: f[2], desc: f[3] });
+
+const CLOGIC = [
+  ['==', 'equal to'], ['<>', 'not equal to'], ['<', 'less than'], ['>', 'greater than'],
+  ['<=', 'less than or equal to'], ['>=', 'greater than or equal to'],
+  ['and', 'both conditions are true'], ['or', 'either condition is true'], ['not', 'reverses a condition'],
+];
+const CCONST = {
+  PI: 'π = 3.14159… (unitless). You can also type π.',
+  E: "Euler's number e = 2.71828… (unitless).",
+  Gravity: 'Standard gravity, 9.80665 m/s².',
+  SpeedOfLight: 'Speed of light, 299 792 458 m/s.',
+};
+const CUNITS = [
+  ['Length', ['mm', 'cm', 'm', 'in', 'ft', 'yd', 'mil', 'micron', 'hm', 'mi', 'nauticalMile']],
+  ['Angle', ['deg', 'rad', 'grad']],
+  ['Mass', ['g', 'kg', 'lbmass', 'ouncemass', 'slug', 'tonmass']],
+  ['Time', ['s', 'min', 'hr']],
+  ['Force', ['N', 'lbforce', 'ounceforce', 'tonforce', 'dyne']],
+  ['Pressure', ['Pa', 'psi', 'psf', 'ksi', 'bar', 'atm', 'mmHg', 'inHg', 'inH2O', 'ftH2O', 'mH2O']],
+  ['Speed', ['mps', 'fps', 'mph', 'knots', 'mmpm', 'mpm', 'inpm', 'ftpm']],
+  ['Volume', ['l', 'gal', 'qt', 'pt', 'cup', 'fl_oz']],
+  ['Area', ['acre', 'circular_mil']],
+  ['Temperature', ['K', 'C', 'F', 'R']],
+  ['Energy and power', ['J', 'erg', 'calorie', 'Btu', 'W', 'hp']],
+  ['Electrical', ['A', 'V', 'ohm', 'S', 'mho', 'farad', 'coulomb', 'H']],
+  ['Other', ['rpm', 'Hz', 'pcs', 'mole', 'sr', 'lx', 'lm', 'cd', 'EV', 'Wb', 'maxwell', 'T', 'gamma', 'gauss',
+             'oersted', 'poise', 'ccs', 'cis', 'cfm', 'cmh', 'gpm', 'lph', 'dol']],
+];
+const CUNIT_SET = new Set();
+CUNITS.forEach(g => g[1].forEach(u => CUNIT_SET.add(u)));
+const LENGTH_UNITS = CUNITS[0][1], ANGLE_UNITS = CUNITS[1][1];
+
+CALC = CALC || { open: false };
+
+function calcParams() {
+  const all = DATA.user.map(p => Object.assign({ isUser: true }, p))
+    .concat(DATA.model.map(p => Object.assign({ isUser: false }, p)));
+  const by = {};
+  all.forEach(p => by[p.name] = p);
+  return { all, by };
+}
+
+// ---- tokenising and highlighting
+
+const ID_CH = 'A-Za-z0-9_"$°µπ';
+const CTOK = new RegExp('(\\s+)|((?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][+-]?\\d+)?)|([A-Za-z_"$°µπ][' + ID_CH + ']*)' +
+                        '|(<=|>=|==|<>|!=|[-+*/^%();<>=,!])|([\\s\\S])', 'g');
+
+function ctokens(s) {
+  const out = [];
+  CTOK.lastIndex = 0;
+  let m;
+  while ((m = CTOK.exec(s))) {
+    const t = m[1] ? 'ws' : m[2] ? 'num' : m[3] ? 'id' : m[4] ? 'op' : 'bad';
+    out.push({ t, v: m[0], start: m.index, end: m.index + m[0].length });
+  }
+  return out;
+}
+
+function classify(toks) {
+  const params = CALC.params.by;
+  const stack = [];
+  let firstProblem = null;
+  const problem = (tok, msg) => { tok.cls = 't-bad'; tok.msg = msg; if (!firstProblem) firstProblem = msg; };
+  for (let i = 0; i < toks.length; i++) {
+    const k = toks[i];
+    if (k.t === 'ws') continue;
+    if (k.t === 'num') { k.cls = 't-num'; continue; }
+    if (k.t === 'bad') { problem(k, 'Unexpected character "' + k.v + '".'); continue; }
+    if (k.t === 'op') {
+      if (k.v === '(') { k.cls = 't-op'; stack.push(i); continue; }
+      if (k.v === ')') {
+        if (!stack.length) problem(k, 'This ")" has no matching "(".');
+        else { const j = stack.pop(); k.match = j; toks[j].match = i; k.cls = 't-op'; }
+        continue;
+      }
+      if (k.v === ',') { problem(k, 'Use ";" to separate function arguments, not ",".'); continue; }
+      if (k.v === '!=') { problem(k, 'Fusion writes "not equal" as <>.'); continue; }
+      if (k.v === '=' ) { problem(k, 'Use == to compare.'); continue; }
+      if (k.v === '!') { problem(k, 'Use the word not.'); continue; }
+      k.cls = ['<', '>', '<=', '>=', '==', '<>'].includes(k.v) ? 't-logic' : 't-op';
+      continue;
+    }
+    // identifier
+    let j = i + 1;
+    while (j < toks.length && toks[j].t === 'ws') j++;
+    const call = j < toks.length && toks[j].v === '(';
+    if (call) {
+      if (CF[k.v]) { k.cls = 't-func'; k.fn = k.v; }
+      else problem(k, '"' + k.v + '" is not a Fusion function.');
+    } else if (params[k.v]) {
+      if (k.v === CALC.name) problem(k, 'A parameter cannot refer to itself.');
+      else { k.cls = 't-param'; k.param = k.v; }
+    } else if (k.v === 'π' || CCONST[k.v]) k.cls = 't-const';
+    else if (['and', 'or', 'not'].includes(k.v)) k.cls = 't-logic';
+    else if (CUNIT_SET.has(k.v)) k.cls = 't-unit';
+    else if (CF[k.v]) problem(k, k.v + ' needs brackets: ' + k.v + '(…)');
+    else problem(k, 'Unknown name "' + k.v + '".');
+  }
+  stack.forEach(i => problem(toks[i], 'This "(" is never closed.'));
+  return firstProblem;
+}
+
+function escHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+function calcRender(noEval) {
+  const ta = $('cIn');
+  const s = ta.value;
+  const toks = ctokens(s);
+  const problem = classify(toks);
+  CALC.toks = toks;
+  CALC.problem = problem;
+
+  // bracket next to the caret and its partner
+  const pos = ta.selectionStart;
+  let hi = -1;
+  toks.forEach((k, i) => { if ((k.v === '(' || k.v === ')') && (k.end === pos || k.start === pos) && k.match !== undefined) hi = i; });
+  const hiSet = hi >= 0 ? new Set([hi, toks[hi].match]) : new Set();
+
+  $('cHL').innerHTML = toks.map((k, i) => {
+    const cls = (k.cls || '') + (hiSet.has(i) ? ' t-match' : '');
+    const title = k.msg ? ' title="' + escHtml(k.msg).replace(/"/g, '&quot;') + '"' : '';
+    return cls.trim() ? '<span class="' + cls.trim() + '"' + title + '>' + escHtml(k.v) + '</span>' : escHtml(k.v);
+  }).join('') + '\n';
+
+  renderMath();
+  calcHint();
+  calcUses();
+  if (!noEval) calcSchedule();
+}
+
+// Function signature for the call the caret is inside, or the first problem.
+function calcHint() {
+  const pos = $('cIn').selectionStart;
+  const stack = [];
+  let lastId = null;
+  for (const k of CALC.toks) {
+    if (k.start >= pos) break;
+    if (k.t === 'ws') continue;
+    if (k.v === '(') { stack.push({ fn: lastId && CF[lastId] ? lastId : null, arg: 0 }); lastId = null; continue; }
+    if (k.v === ';' && stack.length) { stack[stack.length - 1].arg++; lastId = null; continue; }
+    if (k.v === ')') { stack.pop(); lastId = null; continue; }
+    lastId = k.t === 'id' ? k.v : null;
+  }
+  const top = [...stack].reverse().find(x => x.fn);
+  const h = $('cHint');
+  if (top) {
+    const f = CF[top.fn];
+    const args = f.args.map((a, i) => i === top.arg ? '<b>' + escHtml(a) + '</b>' : escHtml(a)).join('; ');
+    h.innerHTML = '<code>' + top.fn + '(' + args + ')</code> — ' + escHtml(f.desc);
+  } else if (CALC.problem) {
+    h.innerHTML = '<span style="color:var(--bad)">' + escHtml(CALC.problem) + '</span>';
+  } else {
+    h.textContent = '';
+  }
+}
+
+function calcUses() {
+  const seen = [];
+  CALC.toks.forEach(k => { if (k.param && !seen.includes(k.param)) seen.push(k.param); });
+  const box = $('cUses');
+  box.innerHTML = '';
+  seen.slice(0, 12).forEach(n => {
+    const p = CALC.params.by[n];
+    const s = el('span', { title: p.expr ? n + ' = ' + p.expr : n });
+    s.appendChild(el('b', { textContent: n }));
+    s.appendChild(document.createTextNode(' = ' + (p.value || '')));
+    box.appendChild(s);
+  });
+}
+
+// ---- maths display: parse Fusion syntax (tolerantly) and typeset it
+
+function mparse(src) {
+  const toks = ctokens(src).filter(t => t.t !== 'ws');
+  const params = (CALC.params && CALC.params.by) || {};
+  let i = 0, holes = 0;
+  const peek = (o) => toks[i + (o || 0)];
+  const isV = v => !!peek() && peek().v === v;
+  const isW = w => !!peek() && peek().t === 'id' && peek().v === w && !params[w];
+  const N = (k, s, e, x) => Object.assign({ k, s, e }, x);
+  const hole = () => { holes++; const p = peek(); const at = p ? p.start : src.length; return N('hole', at, at); };
+  const STOP = new Set([')', ';', ',', '+', '*', '/', '%', '^', '<', '>', '<=', '>=', '==', '<>', '=', '!=']);
+
+  function orE() { let a = andE(); while (isW('or')) { i++; const b = andE(); a = N('logic', a.s, b.e, { op: 'or', a, b }); } return a; }
+  function andE() { let a = notE(); while (isW('and')) { i++; const b = notE(); a = N('logic', a.s, b.e, { op: 'and', a, b }); } return a; }
+  function notE() { if (isW('not')) { const t = toks[i++]; const x = notE(); return N('not', t.start, x.e, { x }); } return cmpE(); }
+  function cmpE() {
+    let a = addE();
+    if (peek() && ['<', '>', '<=', '>=', '==', '<>', '=', '!='].includes(peek().v)) {
+      const op = toks[i++].v; const b = addE(); a = N('cmp', a.s, b.e, { op, a, b });
+    }
+    return a;
+  }
+  function addE() { let a = mulE(); while (isV('+') || isV('-')) { const op = toks[i++].v; const b = mulE(); a = N('bin', a.s, b.e, { op, a, b }); } return a; }
+  function mulE() { let a = unE(); while (isV('*') || isV('/') || isV('%')) { const op = toks[i++].v; const b = unE(); a = N('bin', a.s, b.e, { op, a, b }); } return a; }
+  function unE() {
+    if (isV('-')) { const t = toks[i++]; const x = unE(); return N('neg', t.start, x.e, { x }); }
+    if (isV('+')) { i++; return unE(); }
+    return powE();
+  }
+  function powE() { const b = postE(); if (isV('^')) { i++; const x = unE(); return N('pow', b.s, x.e, { a: b, b: x }); } return b; }
+  function postE() {
+    let x = primE();
+    while (peek() && peek().t === 'id' && CUNIT_SET.has(peek().v) && !params[peek().v] && !(peek(1) && peek(1).v === '(')) {
+      const t = toks[i++]; x = N('unit', x.s, t.end, { x, u: t.v });
+    }
+    return x;
+  }
+  function primE() {
+    const t = peek();
+    if (!t || STOP.has(t.v)) return hole();
+    i++;
+    if (t.t === 'num') return N('num', t.start, t.end, { v: t.v });
+    if (t.v === '(') {
+      const x = orE(); let e = x.e;
+      if (isV(')')) { e = toks[i].end; i++; } else holes++;
+      return N('paren', t.start, e, { x });
+    }
+    if (t.t === 'id') {
+      if (isV('(')) {
+        i++;
+        const args = [];
+        if (!isV(')')) { args.push(orE()); while (isV(';') || isV(',')) { i++; args.push(orE()); } }
+        let e = args.length ? args[args.length - 1].e : t.end;
+        if (isV(')')) { e = toks[i].end; i++; } else holes++;
+        return N('call', t.start, e, { fn: t.v, args, bad: !CF[t.v] });
+      }
+      if (params[t.v]) return N('param', t.start, t.end, { name: t.v });
+      if (t.v === 'π' || CCONST[t.v]) return N('const', t.start, t.end, { name: t.v });
+      if (CUNIT_SET.has(t.v)) return N('unit', t.start, t.end, { x: null, u: t.v });
+      return N('name', t.start, t.end, { name: t.v, bad: true });
+    }
+    return N('name', t.start, t.end, { name: t.v, bad: true });
+  }
+
+  let root = toks.length ? orE() : N('hole', 0, 0);
+  if (!toks.length) holes++;
+  while (i < toks.length) { i++; holes++; }   // leftovers such as an extra ')'
+  return { root, holes };
+}
+
+function unwrap(n) { while (n && n.k === 'paren') n = n.x; return n; }
+
+// Precedence for the typeset view (a fraction is self-contained, so it counts as an atom)
+// Brackets the user typed are kept when they group something. They are dropped
+// only where they add nothing: around a single item (name, number, function,
+// fraction, power), when doubled, or where the layout already groups the
+// contents (fraction parts, √, |x|, function arguments, the whole expression).
+function selfDelimiting(n) {
+  return ['num', 'param', 'const', 'name', 'hole', 'call', 'unit', 'pow'].includes(n.k) || (n.k === 'bin' && n.op === '/');
+}
+function keptParen(n) { return n.k === 'paren' && !selfDelimiting(unwrap(n)); }
+function mdel(n, wrap) { return mrender(unwrap(n), wrap); }   // render in a context that already groups
+
+function mprec(n) {
+  if (n && n.k === 'paren' && keptParen(n)) return 10;
+  n = unwrap(n);
+  switch (n.k) {
+    case 'logic': return n.op === 'or' ? 1 : 2;
+    case 'not': return 3;
+    case 'cmp': return 4;
+    case 'bin': return n.op === '/' ? 10 : (n.op === '+' || n.op === '-') ? 5 : 6;
+    case 'neg': return 7;
+    case 'pow': return 8;
+    case 'unit': return n.x ? 9 : 10;
+    case 'call': return (n.fn === 'pow' || n.fn === 'exp') && !n.bad ? 8 : 10;
+    default: return 10;
+  }
+}
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+function stretchSvg(cls, viewW, d, w) {
+  // The wrapper has no height of its own, so it stretches to the content beside it;
+  // the SVG then fills the wrapper.
+  const wrap = document.createElement('span');
+  wrap.className = cls;
+  const s = document.createElementNS(SVG_NS, 'svg');
+  s.setAttribute('viewBox', '0 0 ' + viewW + ' 100');
+  s.setAttribute('preserveAspectRatio', 'none');
+  const p = document.createElementNS(SVG_NS, 'path');
+  p.setAttribute('d', d);
+  p.setAttribute('fill', 'none');
+  p.setAttribute('stroke', 'currentColor');
+  p.setAttribute('stroke-width', w || '1.5');
+  p.setAttribute('vector-effect', 'non-scaling-stroke');
+  s.appendChild(p);
+  wrap.appendChild(s);
+  return wrap;
+}
+const LPAREN = 'M8 2 C1.5 25 1.5 75 8 98', RPAREN = 'M2 2 C8.5 25 8.5 75 2 98';
+const LBRACE = 'M9 1 C5 1 5 6 5 14 L5 40 C5 46 3 50 1 50 C3 50 5 54 5 60 L5 86 C5 94 5 99 9 99';
+const RADICAL = 'M0 62 L3 56 L7.5 99 L14 0.5';
+
+function mspan(cls, kids, n) {
+  const sp = document.createElement('span');
+  sp.className = 'm' + (cls ? ' ' + cls : '');
+  kids.forEach(k => { if (k != null) sp.appendChild(typeof k === 'string' ? document.createTextNode(k) : k); });
+  if (n) { sp.dataset.s = n.s; sp.dataset.e = n.e; }
+  return sp;
+}
+function mop(t, rel) { const s = document.createElement('span'); s.className = 'mo' + (rel ? ' rel' : ''); s.textContent = t; return s; }
+function mword(t) { const s = document.createElement('span'); s.className = 'mw'; s.textContent = t; return s; }
+function mgroup(inner, n) {
+  return mspan('mgrp', [stretchSvg('br', 10, LPAREN), mspan('in', [inner]), stretchSvg('br', 10, RPAREN)], n);
+}
+function isOneUnit(n) {
+  n = unwrap(n);
+  return n.k === 'unit' && n.x && unwrap(n.x).k === 'num' && parseFloat(unwrap(n.x).v) === 1;
+}
+
+const CONST_SYM = { PI: 'π', 'π': 'π', E: 'e', Gravity: 'g', SpeedOfLight: 'c' };
+const REL_SYM = { '<': '<', '>': '>', '<=': '≤', '>=': '≥', '==': '=', '=': '=', '<>': '≠', '!=': '≠' };
+
+function mw(n, min, wrap) { return mprec(n) < min ? mgroup(mrender(n), n) : mrender(n, wrap); }
+
+// wrap = this piece may break across lines (top level, fraction parts, if-cases);
+// nothing inside brackets or names ever breaks.
+function mrender(node, wrap) {
+  if (node && node.k === 'paren') {
+    return keptParen(node) ? mgroup(mrender(unwrap(node)), node) : mrender(unwrap(node), wrap);
+  }
+  const n = node;
+  switch (n.k) {
+    case 'num': return mspan('mn', [n.v], n);
+    case 'param': { const sp = mspan('mp', [n.name], n); const p = CALC.params.by[n.name]; if (p) sp.title = n.name + ' = ' + p.value; return sp; }
+    case 'const': { const sp = mspan('mk', [CONST_SYM[n.name] || n.name], n); sp.title = n.name; return sp; }
+    case 'name': return mspan('mbad', [n.name], n);
+    case 'hole': return mspan('mhole', [], n);
+    case 'unit': return n.x ? mspan('', [mw(n.x, 9), mspan('mu', [n.u])], n) : mspan('mu', [n.u], n);
+    case 'neg': return mspan('', [mop('−'), mw(n.x, 8)], n);
+    case 'not': return mspan('', [mword('not'), mw(n.x, 4)], n);
+    case 'logic': { const p = mprec(n); return mchain(n, [n.op], p, () => p + 1, op => mword(op), 'logic', wrap); }
+    case 'cmp': return mspan('', [mw(n.a, 5), mop(REL_SYM[n.op] || n.op, true), mw(n.b, 5)], n);
+    case 'pow': return msup(n.a, n.b, n);
+    case 'bin': {
+      if (n.op === '/') {
+        const num = document.createElement('span'); num.className = 'num'; num.appendChild(mdel(n.a, wrap));
+        const den = document.createElement('span'); den.className = 'den'; den.appendChild(mdel(n.b, wrap));
+        return mspan('mfrac' + (wrap ? ' wrap' : ''), [num, den], n);
+      }
+      if (n.op === '*' && isOneUnit(n.b)) return mspan(wrap ? 'wrap' : '', [mw(n.a, 6, wrap), mspan('mu', [unwrap(n.b).u])], n);
+      if (n.op === '*' && isOneUnit(n.a)) return mspan(wrap ? 'wrap' : '', [mw(n.b, 6, wrap), mspan('mu', [unwrap(n.a).u])], n);
+      if (n.op === '%') return mspan('', [mw(n.a, 6), mword('mod'), mw(n.b, 7)], n);
+      if (n.op === '*') return mchain(n, ['*'], 6, () => 7, () => mop('×'), null, wrap);
+      return mchain(n, ['+', '-'], 5, op => op === '-' ? 6 : 5, op => mop(op === '-' ? '−' : '+'), null, wrap);
+    }
+    case 'call': return mcall(n, wrap);
+  }
+  return mspan('', [], n);
+}
+
+// A run like a + b − c + d becomes one wrappable row; a line break puts the
+// operator at the start of the next line, as in printed maths.
+function mchain(n, ops, leftMin, rightMin, opEl, kind, wrap) {
+  const parts = [];
+  let cur = n;
+  const sameKind = x => x.k === (kind || 'bin') && ops.includes(x.op) && !(x.op === '*' && (isOneUnit(x.a) || isOneUnit(x.b)));
+  while (sameKind(cur)) { parts.unshift([cur.op, cur.b]); cur = cur.a; }
+  const kids = [mw(cur, leftMin)];
+  parts.forEach(([op, x]) => kids.push(mspan('seg', [opEl(op), mw(x, rightMin(op))])));
+  return mspan('chain' + (wrap ? ' wrap' : ''), kids, n);
+}
+
+function msup(base, exp, n) {
+  const b = unwrap(base);
+  const needs = mprec(base) < 10 || (b.k === 'bin' && b.op === '/');
+  const bEl = needs ? mgroup(mrender(base), base) : mrender(base);
+  const e = document.createElement('span'); e.className = 'exp'; e.appendChild(mdel(exp));
+  return mspan('msup', [bEl, e], n);
+}
+
+function mcall(n, wrap) {
+  const a = n.args, a0 = a[0] || { k: 'hole', s: n.e, e: n.e };
+  if (!n.bad) {
+    if (n.fn === 'sqrt') return mspan('msqrt', [stretchSvg('rad', 14, RADICAL), mspan('in', [mdel(a0)])], n);
+    if (n.fn === 'abs') return mspan('mbars abs', [mdel(a0)], n);
+    if (n.fn === 'floor') return mspan('mbars floor', [mdel(a0)], n);
+    if (n.fn === 'ceil') return mspan('mbars ceil', [mdel(a0)], n);
+    if (n.fn === 'exp') return msup({ k: 'const', name: 'E', s: n.s, e: n.s }, a0, n);
+    if (n.fn === 'pow') return msup(a0, a[1] || { k: 'hole', s: n.e, e: n.e }, n);
+    if (n.fn === 'if') {
+      const cells = [];
+      let cur = n;
+      while (cur && cur.k === 'call' && cur.fn === 'if' && !cur.bad) {
+        const g = cur.args;
+        const hole = { k: 'hole', s: cur.e, e: cur.e };
+        cells.push(mspan('case', [mdel(g[1] || hole, wrap), mspan('cond', [mword('if'), mdel(g[0] || hole)])]));
+        cur = unwrap(g[2] || hole);
+      }
+      cells.push(mspan('case', [mdel(cur, wrap), mspan('cond', [mword('otherwise')])]));
+      return mspan('mpw' + (wrap ? ' wrap' : ''), [stretchSvg('br', 10, LBRACE, '1.4'), mspan('cases', cells)], n);
+    }
+  }
+  const kids = [];
+  a.forEach((x, k) => { if (k) kids.push(mop(',')); kids.push(mdel(x)); });
+  if (!a.length && n.fn !== 'random') kids.push(mspan('mhole', []));
+  const name = mspan(n.bad ? 'mbad' : 'mf', [n.fn]);
+  return mspan('', [name, mgroup(mspan('', kids))], n);
+}
+
+function renderMath() {
+  const box = $('cMath');
+  const { root } = mparse($('cIn').value);
+  CALC.ast = root;
+  box.innerHTML = '';
+  box.appendChild(mdel(root, true));
+  // highlight the smallest piece that contains the caret
+  const pos = $('cIn').selectionStart;
+  let best = null, bestLen = Infinity;
+  box.querySelectorAll('[data-s]').forEach(sp => {
+    const s = +sp.dataset.s, e = +sp.dataset.e;
+    if (s <= pos && pos <= e && e - s < bestLen && e - s < $('cIn').value.length) { best = sp; bestLen = e - s; }
+  });
+  if (best && document.activeElement === $('cIn')) best.classList.add('cur');
+}
+
+// ---- tidy: rewrite the text with only the brackets Fusion needs
+
+function tprec(n) {
+  n = unwrap(n);
+  switch (n.k) {
+    case 'logic': return n.op === 'or' ? 1 : 2;
+    case 'not': return 3;
+    case 'cmp': return 4;
+    case 'bin': return (n.op === '+' || n.op === '-') ? 5 : 6;
+    case 'neg': return 7;
+    case 'pow': return 8;
+    case 'unit': return n.x ? 9 : 10;
+    default: return 10;
+  }
+}
+function tw(n, min) { const s = ttext(n); return tprec(n) < min ? '(' + s + ')' : s; }
+function ttext(node) {
+  const n = unwrap(node);
+  switch (n.k) {
+    case 'num': return n.v;
+    case 'param': return n.name;
+    case 'const': return n.name === 'π' ? 'PI' : n.name;
+    case 'unit': return n.x ? tw(n.x, 9) + ' ' + n.u : n.u;
+    case 'neg': return '-' + tw(n.x, 8);
+    case 'not': return 'not ' + tw(n.x, 4);
+    case 'logic': { const p = tprec(n); return tw(n.a, p) + ' ' + n.op + ' ' + tw(n.b, p + 1); }
+    case 'cmp': return tw(n.a, 5) + ' ' + ({ '=': '==', '!=': '<>' }[n.op] || n.op) + ' ' + tw(n.b, 5);
+    case 'pow': return tw(n.a, 9) + '^' + tw(n.b, 9);
+    case 'bin': {
+      const p = tprec(n);
+      const right = (n.op === '+' || n.op === '*') ? p : p + 1;
+      return tw(n.a, p) + ' ' + n.op + ' ' + tw(n.b, right);
+    }
+    case 'call': return n.fn + '(' + n.args.map(x => ttext(x)).join('; ') + ')';
+    default: throw new Error('incomplete');
+  }
+}
+
+function fusionEval(expr) {
+  const payload = { expression: expr };
+  if (CALC.mode === 'param') payload.name = CALC.name; else payload.unit = CALC.unit;
+  return Promise.resolve(adsk.fusionSendData('evaluate', JSON.stringify(payload)))
+    .then(r => { try { return JSON.parse(r || '{}'); } catch (e) { return {}; } });
+}
+
+function calcTidy() {
+  const src = $('cIn').value;
+  const parsed = mparse(src);
+  let text;
+  try {
+    if (parsed.holes) throw new Error('incomplete');
+    text = ttext(parsed.root);
+  } catch (e) {
+    calcDesc('<span style="color:var(--bad)">Finish the expression before tidying it.</span>');
+    return;
+  }
+  if (text === src.trim()) { calcDesc('Already tidy.'); return; }
+  Promise.all([fusionEval(src), fusionEval(text)]).then(([a, b]) => {
+    const same = a.valid && b.valid && typeof a.raw === 'number' && typeof b.raw === 'number' &&
+                 Math.abs(a.raw - b.raw) <= 1e-9 * Math.max(1, Math.abs(a.raw));
+    if (!same) {
+      calcDesc('<span style="color:var(--bad)">Tidying would change the result, so the text was left as it is.</span>');
+      return;
+    }
+    const ta = $('cIn');
+    CALC.sel = { s: 0, e: ta.value.length };
+    ta.setSelectionRange(0, ta.value.length);
+    calcInsert(text, '');
+    calcDesc('Tidied — same value, fewer brackets. Undo (↶) brings the old text back.');
+  });
+}
+
+// ---- live evaluation by Fusion (debounced; stale replies ignored)
+
+function calcSchedule() {
+  clearTimeout(CALC.timer);
+  $('cRes').classList.add('wait');
+  CALC.timer = setTimeout(calcEvaluate, 140);
+}
+
+function calcEvaluate() {
+  const expr = $('cIn').value;
+  const seq = (CALC.seq = (CALC.seq || 0) + 1);
+  const res = $('cRes');
+  const payload = { expression: expr };
+  if (CALC.mode === 'param') payload.name = CALC.name; else payload.unit = CALC.unit;
+  let p;
+  try { p = adsk.fusionSendData('evaluate', JSON.stringify(payload)); }
+  catch (e) { res.className = 'err'; res.textContent = 'Could not reach Fusion.'; return; }
+  Promise.resolve(p).then(r => {
+    if (seq !== CALC.seq || !CALC.open) return;
+    let d = {};
+    try { d = JSON.parse(r || '{}'); } catch (e) {}
+    CALC.valid = !!d.valid;
+    // Fusion is the authority; the local checker only explains problems more precisely.
+    if (d.valid) { res.className = ''; res.textContent = d.value; }
+    else { res.className = 'err'; res.textContent = CALC.problem || d.error || 'Invalid expression.'; }
+    calcButtons();
+  });
+}
+
+function calcButtons() {
+  $('cApply').disabled = !CALC.valid;
+  $('cUndo').disabled = !CALC.hist.length;
+  $('cRedo').disabled = !CALC.redo.length;
+}
+
+// ---- editing with undo
+
+function calcSnap() {
+  const ta = $('cIn');
+  return { v: ta.value, s: ta.selectionStart, e: ta.selectionEnd };
+}
+
+function calcPush() {
+  CALC.hist.push(calcSnap());
+  if (CALC.hist.length > 200) CALC.hist.shift();
+  CALC.redo = [];
+}
+
+function calcRestore(st) {
+  const ta = $('cIn');
+  ta.value = st.v;
+  ta.focus();
+  ta.setSelectionRange(st.s, st.e);
+  calcRender();
+  calcButtons();
+}
+
+function calcUndo() { if (CALC.hist.length) { CALC.redo.push(calcSnap()); calcRestore(CALC.hist.pop()); } }
+function calcRedo() { if (CALC.redo.length) { CALC.hist.push(calcSnap()); calcRestore(CALC.redo.pop()); } }
+
+function calcSel() {
+  const ta = $('cIn');
+  if (document.activeElement === ta) return { s: ta.selectionStart, e: ta.selectionEnd };
+  return CALC.sel || { s: ta.value.length, e: ta.value.length };
+}
+
+// Replace the selection with before + selected text + after; caret ends at caretAt (offset in inserted text) or after it.
+function calcInsert(before, after, opts) {
+  opts = opts || {};
+  const ta = $('cIn');
+  const { s, e } = calcSel();
+  const v = ta.value;
+  const selected = v.slice(s, e);
+  let pre = before, post = after || '';
+  if (opts.spaced) {
+    if (s === 0 || /\s$/.test(v.slice(0, s)) || v[s - 1] === '(') pre = pre.replace(/^ /, '');
+    if (/^\s/.test(v.slice(e))) post = post.replace(/ $/, '');
+  }
+  calcPush();
+  const middle = opts.keepSelection ? selected : '';
+  const text = pre + middle + post;
+  ta.value = v.slice(0, s) + text + v.slice(e);
+  let caret = s + text.length;
+  if (opts.caret !== undefined) caret = s + (typeof opts.caret === 'function' ? opts.caret(pre, middle, post) : opts.caret);
+  ta.focus();
+  ta.setSelectionRange(caret, caret);
+  CALC.sel = { s: caret, e: caret };
+  calcRender();
+  calcButtons();
+}
+
+function insertFunction(name) {
+  const f = CF[name];
+  const n = f.args.length;
+  const { s, e } = calcSel();
+  const hasSel = e > s;
+  if (n === 0) return calcInsert(name + '()', '');
+  const rest = n > 1 ? '; '.repeat(n - 1).replace(/ $/, ' ') : '';
+  // Selected text becomes the first argument; caret goes to the next empty slot.
+  calcInsert(name + '(', rest + ')', {
+    keepSelection: true,
+    caret: (pre, mid) => hasSel ? pre.length + mid.length + (n > 1 ? 2 : 1) : pre.length,
+  });
+}
+
+function calcKey(k) {
+  const ta = $('cIn');
+  const { s, e } = calcSel();
+  const v = ta.value;
+  if (k === 'back') {
+    if (e > s) return calcInsert('', '');
+    if (s === 0) return;
+    const head = v.slice(0, s);
+    // delete a whole operator / function name / unit when the caret is just after it
+    const m = head.match(/(\s*(?:<=|>=|==|<>|[-+*/^%;<>])\s*|[A-Za-z_"$°µπ][A-Za-z0-9_"$°µπ]*\(|[A-Za-z_"$°µπ][A-Za-z0-9_"$°µπ]*\s?)$/);
+    const len = m && m[0].length > 1 ? m[0].length : 1;
+    CALC.sel = { s: s - len, e: s };
+    ta.setSelectionRange(s - len, s);
+    return calcInsert('', '');
+  }
+  if (k === 'clear') { CALC.sel = { s: 0, e: v.length }; ta.setSelectionRange(0, v.length); return calcInsert('', ''); }
+  if (k === 'left' || k === 'right') {
+    const p = Math.max(0, Math.min(v.length, (k === 'left' ? Math.min(s, e) - (s === e ? 1 : 0) : Math.max(s, e) + (s === e ? 1 : 0))));
+    ta.focus(); ta.setSelectionRange(p, p); CALC.sel = { s: p, e: p }; calcRender(); return;
+  }
+  if (k === 'wrap') return calcInsert('(', ')', { keepSelection: true, caret: (pre, mid) => e > s ? pre.length + mid.length + 1 : 1 });
+  if (k === ';' || k === 'tab') {
+    // jump into the next empty argument slot if there is one, e.g. max(a|; ) -> max(a; |)
+    const m = v.slice(e).match(/^\s*;\s*/);
+    if (m && e === s) { const p2 = e + m[0].length; ta.focus(); ta.setSelectionRange(p2, p2); CALC.sel = { s: p2, e: p2 }; calcRender(true); return; }
+    if (k === 'tab') {
+      const rest = v.slice(e), n = rest.search(/[;)]/);
+      const p2 = n < 0 ? v.length : e + n + 1 + (rest.slice(n + 1).match(/^\s*/)[0].length);
+      ta.focus(); ta.setSelectionRange(p2, p2); CALC.sel = { s: p2, e: p2 }; calcRender(true); return;
+    }
+  }
+  const ops = { '+': ' + ', '-': ' - ', '*': ' * ', '/': ' / ', '^': '^', '%': ' % ', ';': '; ' };
+  if (ops[k]) return calcInsert(ops[k], '', { spaced: true });
+  calcInsert(k, '');
+}
+
+// ---- panes
+
+function keyBtn(label, action, cls, desc) {
+  const b = el('button', { className: 'key ' + (cls || ''), textContent: label });
+  b.dataset.desc = desc || '';
+  b.onclick = () => action();
+  return b;
+}
+
+function chip(label, cls, desc, action) {
+  const b = el('button', { className: 'chip ' + (cls || ''), textContent: label });
+  b.dataset.desc = desc || '';
+  b.onclick = () => action();
+  return b;
+}
+
+function unitChips(list, current) {
+  const box = el('div', { className: 'chips' });
+  list.forEach(u => box.appendChild(chip(u, 'unit' + (u === current ? ' cur' : ''), 'Insert the unit <code>' + u + '</code> (put it right after a number, e.g. <code>5 ' + u + '</code>).',
+    () => calcInsert(' ' + u, '', { spaced: true }))));
+  return box;
+}
+
+function calcPaneKeypad(pane) {
+  const u = CALC.unit || '';
+  const quick = LENGTH_UNITS.includes(u) ? ['mm', 'cm', 'm', 'in', 'ft'] : ANGLE_UNITS.includes(u) ? ['deg', 'rad'] : [];
+  if (quick.length) {
+    const q = unitChips(quick, u);
+    q.className = 'qunits';
+    pane.appendChild(q);
+  }
+  const g = el('div', { className: 'keys' });
+  const ins = t => () => calcKey(t);
+  [
+    ['7'], ['8'], ['9'], ['(', 'op', 'Open bracket'], [')', 'op', 'Close bracket'],
+    ['4'], ['5'], ['6'], ['×', 'op', 'Multiply  <code>*</code>', '*'], ['÷', 'op', 'Divide  <code>/</code>', '/'],
+    ['1'], ['2'], ['3'], ['+', 'op', 'Add'], ['−', 'op', 'Subtract (or negate)  <code>-</code>', '-'],
+    ['0'], ['.', '', 'Decimal point'], ['xʸ', 'op', 'Power  <code>^</code>  e.g. <code>2^3</code>', '^'],
+    ['%', 'op', 'Floating-point remainder (modulo)  <code>%</code>'], [';', 'op', 'Separates function arguments  <code>;</code>'],
+  ].forEach(([lbl, cls, desc, val]) => g.appendChild(keyBtn(lbl, ins(val || lbl), cls, desc || ('Insert ' + lbl))));
+  g.appendChild(keyBtn('(…)', () => calcKey('wrap'), 'op fn', 'Put brackets around the selection'));
+  g.appendChild(keyBtn('π', () => calcInsert('PI', ''), 'fn', CCONST.PI));
+  g.appendChild(keyBtn('◀', () => calcKey('left'), 'fn', 'Move the cursor left'));
+  g.appendChild(keyBtn('▶', () => calcKey('right'), 'fn', 'Move the cursor right'));
+  g.appendChild(keyBtn('⌫', () => calcKey('back'), 'fn', 'Delete back (whole operators and names at once)'));
+  g.appendChild(keyBtn('√', () => insertFunction('sqrt'), 'fn', 'Square root  <code>sqrt(x)</code>'));
+  g.appendChild(keyBtn('if', () => insertFunction('if'), 'fn', escHtml(CF.if.desc)));
+  g.appendChild(keyBtn('min', () => insertFunction('min'), 'fn', CF.min.desc));
+  g.appendChild(keyBtn('max', () => insertFunction('max'), 'fn', CF.max.desc));
+  g.appendChild(keyBtn('Clear', () => calcKey('clear'), 'fn warn', 'Clear the whole expression'));
+  pane.appendChild(g);
+}
+
+function calcPaneFunctions(pane) {
+  const groups = ['Math', 'Trig', 'Hyperbolic', 'Logic'];
+  groups.forEach(gn => {
+    pane.appendChild(el('div', { className: 'cgroup', textContent: gn === 'Logic' ? 'Conditions' : gn }));
+    const box = el('div', { className: 'chips' });
+    CFUNCS.filter(f => f[2] === gn).forEach(([n, args, , desc]) =>
+      box.appendChild(chip(n + '(' + (args.length ? '…' : '') + ')', 'func',
+        '<code>' + n + '(' + escHtml(args.join('; ')) + ')</code> — ' + escHtml(desc), () => insertFunction(n))));
+    if (gn === 'Logic') {
+      CLOGIC.forEach(([op, d]) => box.appendChild(chip(op, 'logic', '<code>' + escHtml(op) + '</code> — ' + d,
+        () => calcInsert(' ' + op + ' ', '', { spaced: true }))));
+    }
+    pane.appendChild(box);
+  });
+  pane.appendChild(el('div', { className: 'cgroup', textContent: 'Constants' }));
+  const cb = el('div', { className: 'chips' });
+  Object.keys(CCONST).forEach(c => cb.appendChild(chip(c, 'const', escHtml(CCONST[c]), () => calcInsert(c, ''))));
+  pane.appendChild(cb);
+}
+
+function calcPaneParams(pane) {
+  const search = el('input', { type: 'text', className: 'psearch', placeholder: 'Search parameters…' });
+  const list = el('div', { className: 'plist' });
+  const fill = () => {
+    const q = search.value.trim().toLowerCase();
+    list.innerHTML = '';
+    const match = p => !q || [p.name, p.comment, p.owner, p.comp, p.expr].some(s => s && String(s).toLowerCase().includes(q));
+    const section = (title, items) => {
+      const shown = items.filter(match);
+      if (!shown.length) return;
+      list.appendChild(el('div', { className: 'cgroup', textContent: title }));
+      shown.forEach(p => {
+        const self = p.name === CALC.name;
+        const row = el('div', { className: 'pi' + (self ? ' self' : ''), title: self ? 'This is the parameter you are editing' : (p.expr ? p.name + ' = ' + p.expr : p.name) });
+        row.appendChild(el('span', { className: 'pn', textContent: p.name }));
+        row.appendChild(el('span', { className: 'pc', textContent: p.isUser ? (p.comment || '') : [p.owner, p.role].filter(Boolean).join(' · ') }));
+        row.appendChild(el('span', { className: 'pv', textContent: p.value }));
+        if (!self) row.onclick = () => calcInsert(p.name, '');
+        list.appendChild(row);
+      });
+    };
+    const users = CALC.params.all.filter(p => p.isUser);
+    const byName = {};
+    users.forEach(p => byName[p.name] = p);
+    const grouped = new Set();
+    (DATA.groups || []).forEach(g => {
+      section(g.name, g.params.map(n => byName[n]).filter(Boolean));
+      g.params.forEach(n => grouped.add(n));
+    });
+    const order = (DATA.ungrouped && DATA.ungrouped.length ? DATA.ungrouped : users.map(p => p.name));
+    section(DATA.groups && DATA.groups.length ? 'Ungrouped' : 'User parameters',
+            order.filter(n => !grouped.has(n)).map(n => byName[n]).filter(Boolean));
+    section('Model parameters', CALC.params.all.filter(p => !p.isUser));
+    if (!list.children.length) list.appendChild(el('div', { className: 'pc', textContent: 'No matches.' }));
+  };
+  search.addEventListener('input', fill);
+  search.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { const first = list.querySelector('.pi:not(.self)'); if (first) first.click(); e.preventDefault(); }
+  });
+  pane.appendChild(search);
+  pane.appendChild(list);
+  fill();
+  setTimeout(() => search.focus(), 0);
+}
+
+function calcPaneUnits(pane) {
+  CUNITS.forEach(([g, list]) => {
+    pane.appendChild(el('div', { className: 'cgroup', textContent: g }));
+    pane.appendChild(unitChips(list, CALC.unit));
+  });
+}
+
+function calcTab(name) {
+  CALC.tab = name;
+  document.querySelectorAll('#cTabs .ctab').forEach(t => t.classList.toggle('on', t.dataset.tab === name));
+  const pane = $('cPane');
+  pane.innerHTML = '';
+  ({ keypad: calcPaneKeypad, functions: calcPaneFunctions, params: calcPaneParams, units: calcPaneUnits })[name](pane);
+  calcDesc('');
+}
+
+function calcDesc(html) {
+  $('cDesc').innerHTML = html || 'Tip: select part of the expression first and a function will wrap it, e.g. select <code>a + b</code> then press √.';
+}
+
+// ---- open / close / apply
+
+function openCalc(target) {
+  // target: { mode: 'param' | 'add', name, expr, unit, isUser }
+  closeMenu();
+  CALC.open = true;
+  CALC.mode = target.mode;
+  CALC.name = target.mode === 'param' ? target.name : '';
+  CALC.unit = target.unit || '';
+  CALC.params = calcParams();
+  CALC.hist = []; CALC.redo = []; CALC.valid = false; CALC.sel = null;
+  $('cTitle').innerHTML = '';
+  $('cTitle').appendChild(document.createTextNode(target.mode === 'param' ? target.name : (target.name || 'New parameter')));
+  $('cTitle').appendChild(el('small', { textContent: target.mode === 'param' ? (target.isUser ? '  user parameter' : '  model parameter') : '  new user parameter' }));
+  $('cUnit').textContent = CALC.unit ? CALC.unit : 'unitless';
+  const ta = $('cIn');
+  ta.value = target.expr || '';
+  $('calc').classList.add('on');
+  calcTab('keypad');
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+  calcRender();
+  calcButtons();
+}
+
+function closeCalc() {
+  CALC.open = false;
+  clearTimeout(CALC.timer);
+  $('calc').classList.remove('on');
+  if (pending && !isEditing()) { pending = false; render(); }
+}
+
+function applyCalc() {
+  if (!CALC.valid) return;
+  const expr = $('cIn').value.trim();
+  if (CALC.mode === 'add') {
+    $('nExpr').value = expr;
+    closeCalc();
+    $('nExpr').focus();
+    return;
+  }
+  $('cApply').disabled = true;
+  send('setExpression', { name: CALC.name, expression: expr }).then(res => {
+    if (res.ok) closeCalc();
+    else { const r = $('cRes'); r.className = 'err'; r.textContent = res.error || 'Fusion rejected this expression.'; calcButtons(); }
+  });
+}
+
+function exprCell(p, isUser) {
+  const inp = field(p, 'expr', 'setExpression', 'expression');
+  const b = el('button', { className: 'fx', textContent: 'ƒx', title: 'Open expression calculator' });
+  b.onclick = e => {
+    e.stopPropagation();
+    openCalc({ mode: 'param', name: p.name, expr: inp.value, unit: p.unit, isUser });
+  };
+  return el('td', {}, [el('div', { className: 'exprcell' }, [inp, b])]);
+}
+
+(function wireCalc() {
+  const ta = $('cIn');
+  let lastTyped = 0;
+  ta.addEventListener('beforeinput', () => {
+    // group fast typing into one undo step
+    const now = Date.now();
+    if (now - lastTyped > 600) calcPush();
+    lastTyped = now;
+  });
+  ta.addEventListener('input', () => { calcRender(); calcButtons(); });
+  ['keyup', 'click', 'select'].forEach(ev => ta.addEventListener(ev, () => {
+    CALC.sel = { s: ta.selectionStart, e: ta.selectionEnd };
+    calcRender(true);   // caret moved: refresh bracket match + hint only
+  }));
+  ta.addEventListener('blur', () => { CALC.sel = { s: ta.selectionStart, e: ta.selectionEnd }; });
+  ta.addEventListener('scroll', () => { $('cHL').scrollTop = ta.scrollTop; });
+  ta.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); applyCalc(); }
+    else if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); calcKey('tab'); }
+    else if (e.key === ';' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); calcKey(';'); }
+    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); calcUndo(); }
+    else if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); calcRedo(); }
+  });
+  $('calc').addEventListener('keydown', e => {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeCalc(); }
+  });
+  // Buttons must not steal the caret from the editor (except text boxes like the search field)
+  $('calc').addEventListener('mousedown', e => {
+    if (e.target.closest('button') && !e.target.closest('.chead')) e.preventDefault();
+    if (e.target.id === 'calc') closeCalc();
+  });
+  $('calc').addEventListener('mouseover', e => {
+    const b = e.target.closest('[data-desc]');
+    if (b && b.dataset.desc) calcDesc(b.dataset.desc);
+  });
+  $('cTabs').addEventListener('click', e => { const t = e.target.closest('.ctab'); if (t) calcTab(t.dataset.tab); });
+  $('cMath').addEventListener('click', e => {
+    const sp = e.target.closest('[data-s]');
+    const ta = $('cIn');
+    ta.focus();
+    if (sp) {
+      const s = +sp.dataset.s, en = +sp.dataset.e;
+      ta.setSelectionRange(s, en);
+      CALC.sel = { s, e: en };
+    }
+    calcRender(true);
+  });
+  $('cTidy').onclick = calcTidy;
+  $('cClose').onclick = closeCalc;
+  $('cCancel').onclick = closeCalc;
+  $('cApply').onclick = applyCalc;
+  $('cUndo').onclick = calcUndo;
+  $('cRedo').onclick = calcRedo;
+  $('nExprFx').onclick = () => openCalc({ mode: 'add', name: $('nName').value.trim(), expr: $('nExpr').value, unit: $('nUnit').value.trim() });
+})();
+
+// ---------------------------------------------------------------- column resizing
+//
+// Widths are remembered across files and sessions. Until the user resizes, columns
+// share the palette width proportionally. The Comment column always stretches to
+// fill any spare space; if the columns are wider than the palette, the table scrolls.
+
+const FIXED_W = 62 + 22;                          // star/grip column + delete column
+const DEF_FRAC = { name: .27, expr: .27, val: .18, comment: .28 };
+const MIN_W = { name: 50, expr: 50, val: 40, comment: 40 };
+const COLS_KEY = 'liveParams.columns';
+let COLW = null;
+let RESIZE = null;
+
+try { const s = JSON.parse(localStorage.getItem(COLS_KEY) || 'null'); if (s && s.name) COLW = s; } catch (e) {}
+
+function wrapWidth() { return Math.max(320, $('tableWrap').clientWidth || 0); }
+
+function colWidths() {
+  if (COLW) return COLW;
+  const a = wrapWidth() - FIXED_W, w = {};
+  Object.keys(DEF_FRAC).forEach(k => w[k] = Math.max(MIN_W[k], a * DEF_FRAC[k]));
+  return w;
+}
+
+function applyCols() {
+  const w = colWidths();
+  const sum = FIXED_W + w.name + w.expr + w.val + w.comment;
+  const spare = Math.max(0, wrapWidth() - sum);
+  document.querySelectorAll('col[data-col]').forEach(c => {
+    const k = c.dataset.col;
+    c.style.width = Math.round(w[k] + (k === 'comment' ? spare : 0)) + 'px';
+  });
+  $('table').style.width = Math.round(sum + spare) + 'px';
+}
+
+document.querySelectorAll('th .rz').forEach(h => {
+  h.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    e.preventDefault(); e.stopPropagation();
+    const th = h.parentElement, col = th.dataset.col;
+    // Freeze the current layout so other columns don't move while dragging
+    const w = Object.assign({}, colWidths());
+    if (!COLW) COLW = w;
+    // Start from what is on screen (Comment may currently be stretched to fill)
+    const shown = th.getBoundingClientRect().width;
+    if (shown > 0) COLW[col] = shown;
+    RESIZE = { col, x: e.clientX, w: COLW[col], handle: h };
+    h.classList.add('active');
+    document.body.classList.add('resizing');
+  });
+  h.addEventListener('dblclick', e => {
+    e.stopPropagation();
+    COLW = null;
+    try { localStorage.removeItem(COLS_KEY); } catch (err) {}
+    applyCols();
+  });
+  h.addEventListener('click', e => e.stopPropagation());
+});
+
+document.addEventListener('mousemove', e => {
+  if (!RESIZE) return;
+  COLW[RESIZE.col] = Math.max(MIN_W[RESIZE.col], RESIZE.w + (e.clientX - RESIZE.x));
+  applyCols();
+});
+
+document.addEventListener('mouseup', () => {
+  if (!RESIZE) return;
+  RESIZE.handle.classList.remove('active');
+  RESIZE = null;
+  document.body.classList.remove('resizing');
+  try { localStorage.setItem(COLS_KEY, JSON.stringify(COLW)); } catch (e) {}
+});
+
+window.addEventListener('resize', applyCols);
+applyCols();
+
+fillGroupSelects();
+updateSelBar();
+(function whenReady() {
+  if (window.adsk && adsk.fusionSendData) send('refresh');
+  else setTimeout(whenReady, 100);
+})();
+</script>
+</body>
+</html>
