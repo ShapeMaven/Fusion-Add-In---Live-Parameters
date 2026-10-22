@@ -1,3 +1,6 @@
+
+Enjoy this add=in? Feel free to show your gratitude by following me on Patreon, MakerWorld or Creality Cloud. If you don't, you're still a legend and I hope you enjoy this add on as much as I do. 
+
 # Live Parameters for Fusion
 
 Live Parameters is a dockable panel that lists all of a design's user and model parameters and lets you edit them in place. It stays open while you work, including while a sketch is being edited, so you don't need the Change Parameters dialog.
